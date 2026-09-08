@@ -1,0 +1,18 @@
+{
+  "name": "grok-video-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "test": "node --test",
+    "install:browser": "playwright install chromium"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "ffmpeg-static": "^5.2.0",
+    "multer": "^2.0.2",
+    "playwright": "^1.55.0"
+  }
+}

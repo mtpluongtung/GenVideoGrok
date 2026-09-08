@@ -1,0 +1,12 @@
+[hidden] { display: none !important; }
+.retry { border: 1px solid #3d4b42; border-radius: 6px; padding: 5px 11px; background: #1c261e; color: #c7ff59; }
+.login-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 700px) {
+  .login-actions { justify-content: flex-start; margin-top: 4px; }
+}
+.reference-upload { margin: 10px 0 4px; color: var(--text); font-weight: 600; }
+.reference-upload input { font-weight: 400; }
+.btn-cancel-job { border: 1px solid #6b4a2f; border-radius: 999px; padding: 7px 11px; background: transparent; color: #f0a35e; cursor: pointer; }
+.btn-cancel-job:hover:not(:disabled) { background: rgba(240, 163, 94, 0.14); }
+.btn-cancel-job:disabled { opacity: 0.6; cursor: default; }
+.status.cancelled { background: rgba(240, 163, 94, 0.15); color: #f0a35e; }

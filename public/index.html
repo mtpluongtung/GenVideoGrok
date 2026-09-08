@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grok Video Studio</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/fixes.css">
+</head>
+<body>
+  <!-- TOPBAR HIỆN ĐẠI TINH GỌN -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-badge">
+        <svg class="brand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="23 7 16 12 23 17 23 7"></polygon>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-row">
+          <h1>Grok Video Studio</h1>
+          <span class="eyebrow">AUTOMATION</span>
+        </div>
+        <p class="brand-tagline">Tạo video tự động với Grok &amp; Gemini</p>
+      </div>
+    </div>
+    <div class="login-actions">
+      <button id="loginGemini" class="secondary" title="Đăng nhập tài khoản Gemini">Đăng nhập Gemini ↗</button>
+      <button id="loginGrok" class="secondary" title="Đăng nhập tài khoản Grok">Đăng nhập Grok ↗</button>
+    </div>
+  </header>
+
+  <!-- DASHBOARD 2 CỘT: BỘ TẠO & HÀNG ĐỢI -->
+  <main class="dashboard">
+    <!-- CỘT TRÁI: BỘ TẠO VIDEO (COMPOSER) -->
+    <section class="panel composer">
+      <div class="panel-head">
+        <div class="panel-title-wrap">
+          <span class="panel-icon">✨</span>
+          <h2>Tạo video mới</h2>
+        </div>
+      </div>
+
+      <!-- TABS CHỌN NGUỒN -->
+      <div class="tabs">
+        <button data-type="topic" class="active">Chủ đề</button>
+        <button data-type="youtube">YouTube</button>
+        <button data-type="upload">Video gốc</button>
+      </div>
+
+      <form id="form">
+        <input type="hidden" name="type" value="topic">
+
+        <!-- NGUỒN YOUTUBE -->
+        <label id="youtubeField" class="field-box" hidden>
+          <span class="field-title">Liên kết YouTube</span>
+          <input name="youtubeUrl" type="url" placeholder="https://youtube.com/watch?v=...">
+        </label>
+
+        <!-- NGUỒN TẢI VIDEO -->
+        <label id="uploadField" class="field-box" hidden>
+          <span class="field-title">Video nguồn</span>
+          <input name="video" type="file" accept="video/*">
+        </label>
+
+        <!-- PROMPT / CHỦ ĐỀ -->
+        <label class="field-box prompt-box">
+          <span id="promptLabel" class="field-title">Chủ đề (không bắt buộc)</span>
+          <textarea name="prompt" rows="3" placeholder="Để trống để Gemini tìm xu hướng đang nổi và tự viết kịch bản, hoặc nhập chủ đề của bạn..."></textarea>
+          <small id="promptHelp">Để trống: Gemini tìm xu hướng hiện tại, chọn ý tưởng và chia kịch bản theo đúng thời lượng.</small>
+        </label>
+
+        <!-- CẤU HÌNH CƠ BẢN: THỜI LƯỢNG & NGÔN NGỮ -->
+        <div class="options-grid">
+          <fieldset class="option-field">
+            <legend>Thời lượng video</legend>
+            <div class="duration-controls">
+              <select name="durationMode" aria-label="Chế độ thời lượng">
+                <option value="auto" disabled>Theo video nguồn</option>
+                <option value="custom" selected>Tùy chỉnh</option>
+              </select>
+              <input name="durationSeconds" type="number" min="10" max="300" step="10" value="10" inputmode="numeric" aria-label="Thời lượng tùy chỉnh tính bằng giây">
+            </div>
+            <small id="durationHelp" aria-live="polite">1 part × 10 giây. Thực tế có thể chênh một phần giây.</small>
+          </fieldset>
+
+          <label class="option-field">
+            <span>Ngôn ngữ video</span>
+            <select name="language">
+              <option value="auto" selected>Theo nội dung chủ đề</option>
+              <option value="vi">Tiếng Việt</option>
+              <option value="en">Tiếng Anh</option>
+              <option value="zh">Tiếng Trung</option>
+              <option value="ja">Tiếng Nhật</option>
+              <option value="ko">Tiếng Hàn</option>
+              <option value="th">Tiếng Thái</option>
+              <option value="id">Tiếng Indonesia</option>
+              <option value="es">Tiếng Tây Ban Nha</option>
+              <option value="fr">Tiếng Pháp</option>
+              <option value="de">Tiếng Đức</option>
+              <option value="pt">Tiếng Bồ Đào Nha</option>
+              <option value="ru">Tiếng Nga</option>
+              <option value="none">Không thoại</option>
+            </select>
+            <small>Áp dụng cho thoại, lời dẫn và phụ đề chủ ý.</small>
+          </label>
+        </div>
+
+        <!-- TÙY CHỌN NÂNG CAO GỌN GÀNG -->
+        <div class="advanced-section">
+          <div class="section-label">Tùy chọn nâng cao</div>
+
+          <!-- TỰ VIẾT TRUYỆN & UPLOAD TRENDFLARE -->
+          <div id="trendflareField" class="story-option">
+            <label class="checkbox-row" for="autoStoryUpload">
+              <input id="autoStoryUpload" name="autoStoryUpload" type="checkbox" value="true" aria-describedby="trendflareHelp">
+              <span>AI tự viết truyện &amp; tự upload Trendflare</span>
+            </label>
+            <small id="trendflareHelp">AI tự sáng tác câu chuyện hoàn chỉnh theo ngôn ngữ đã chọn, tự động đăng bài lên Trendflare CMS, và từ nội dung câu chuyện đó tạo ra kịch bản video.</small>
+          </div>
+
+          <!-- DÙNG ẢNH THAM CHIẾU -->
+          <div id="referenceField" class="story-option">
+            <label class="checkbox-row" for="useReferenceFrames">
+              <input id="useReferenceFrames" name="useReferenceFrames" type="checkbox" value="true" aria-describedby="referenceHelp" checked>
+              <span>Dùng ảnh tham chiếu tự động</span>
+            </label>
+            <small id="referenceHelp">Gửi kèm cho Grok một frame cắt từ video nguồn cho đúng đoạn đó, và frame cuối của đoạn trước để nối tiếp liền mạch. Chế độ Chủ đề chỉ dùng frame cuối của đoạn trước.</small>
+
+            <label class="reference-upload">
+              <span>Ảnh tham chiếu của bạn (không bắt buộc)</span>
+              <input id="referenceImages" name="referenceImages" type="file" accept="image/*" multiple>
+            </label>
+            <small id="referenceUploadHelp">Tối đa 3 ảnh, mỗi ảnh dưới 20 MB. Ảnh này được gửi kèm cho mọi đoạn để giữ nhân vật và phong cách theo ý bạn.</small>
+          </div>
+
+          <!-- VIẾT CÂU CHUYỆN DỰA TRÊN VIDEO -->
+          <div id="storyField" class="story-option" hidden>
+            <label class="checkbox-row" for="writeStory">
+              <input id="writeStory" name="writeStory" type="checkbox" value="true" aria-describedby="storyHelp" disabled>
+              <span>Viết câu chuyện dựa trên video</span>
+            </label>
+            <small id="storyHelp">Gemini sẽ sáng tác thêm một câu chuyện có nhân vật và nội dung bám sát video, rồi lưu Tiêu đề và Nội dung thành file .txt. Luồng tạo video không thay đổi.</small>
+          </div>
+
+          <!-- TỰ ĐĂNG REELS -->
+          <div id="reelsField" class="story-option" hidden>
+            <label class="checkbox-row" for="postToReels">
+              <input id="postToReels" name="postToReels" type="checkbox" value="true" aria-describedby="reelsHelp">
+              <span>Tự đăng Facebook Reels khi xong</span>
+            </label>
+            <small id="reelsHelp">Video sẽ được đăng công khai lên Facebook Page ngay sau khi ghép xong. Reels bắt buộc tỷ lệ 9:16 và tối đa 90 giây; bật ô này thì chế độ Chủ đề tự chuyển sang 9:16.</small>
+          </div>
+        </div>
+
+        <!-- TÓM TẮT & NÚT TẠO -->
+        <div class="formfoot">
+          <div class="workflow-box">
+            <span class="workflow-icon">⚡</span>
+            <small id="workflowNote">Để trống: Gemini tìm xu hướng và viết 1 part × 10 giây; ưu tiên 1080p, tự động dùng 720p nếu không có.</small>
+          </div>
+          <button type="submit" class="primary">Thêm vào hàng đợi →</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- CỘT PHẢI: HÀNG ĐỢI SẢN XUẤT (QUEUE & HISTORY) -->
+    <section class="panel queue-panel">
+      <div class="queue-top">
+        <div class="section-title">
+          <h2>Hàng đợi sản xuất</h2>
+          <span id="count" class="count-pill"></span>
+        </div>
+        <div class="queue-filters">
+          <button type="button" class="filter-pill active" data-filter="all">Tất cả</button>
+          <button type="button" class="filter-pill" data-filter="running">Đang chạy</button>
+          <button type="button" class="filter-pill" data-filter="done">Hoàn tất</button>
+          <button type="button" class="filter-pill" data-filter="failed">Lỗi</button>
+        </div>
+      </div>
+      <div id="jobs" class="jobs"></div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
