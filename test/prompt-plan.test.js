@@ -12,6 +12,7 @@ import {
   formatGeminiStoryText,
   MIN_STORY_WORDS,
   MIN_STORY_WORDS_RETRY,
+  parseGeminiMasterStory,
   parseGeminiStory,
   parseGeminiStoryboard,
   sourceCoverageRanges
@@ -266,3 +267,71 @@ test('prompt Gemini và Grok công bố đúng độ dài clip 15 giây', () => 
   assert.match(topic.prompt, /Create exactly one 15-second video clip/);
   assert.match(topic.prompt, /of a 60-second sequence/);
 });
+
+test('parseGeminiStory cứu thành công JSON chứa ngoặc kép chưa escape trong đối thoại nhân vật', () => {
+  const malformedJson = `{\n  "title": "Bình minh trên biển",\n  "content": "Mặt trời vừa ló rạng trên đường chân trời xa xăm.\\n\\n"Chào buổi sáng," Hải mỉm cười nói với người bạn đồng hành. "Hôm nay biển thật lặng sóng và trong xanh."\\n\\nThuyền trưởng gật đầu đồng tình và kéo cánh buồm lên cao đón ngọn gió ban mai rực rỡ."\n}`;
+  
+  assert.throws(() => JSON.parse(malformedJson), /Unexpected token|Expected/);
+
+  const story = parseGeminiStory(malformedJson);
+  assert.equal(story.title, 'Bình minh trên biển');
+  assert.match(story.content, /Chào buổi sáng/);
+  assert.match(story.content, /Hải mỉm cười/);
+  assert.equal(story.wordCount > 10, true);
+});
+
+test('parseGeminiMasterStory cứu thành công JSON chứa ngoặc kép chưa escape trong đối thoại', () => {
+  const malformedJson = `{\n  "title": "Khúc tráng ca sông sâu",\n  "content": "Dòng sông mùa lũ cuộn trào đỏ nặng phù sa.\\n\\n"Bác Ba," người thanh niên cất tiếng hỏi giữa màn mưa giăng kín. "Chúng ta có qua sông kịp chuyến đò chiều nay không?"\\n\\nNgười lái đò im lặng nhìn ra giữa dòng nước cuồn cuộn sóng bạc đầu."\n}`;
+
+  assert.throws(() => JSON.parse(malformedJson), /Unexpected token|Expected/);
+  const story = parseGeminiMasterStory(malformedJson);
+  assert.equal(story.title, 'Khúc tráng ca sông sâu');
+  assert.match(story.content, /Bác Ba/);
+  assert.equal(story.wordCount > 10, true);
+});
+
+test('parseGeminiStory bóc tách đúng định dạng văn bản thô (Tiêu đề: ... Nội dung: ...)', () => {
+  const plainText = `Tiêu đề: Người giữ rừng phương Nam\n\nNội dung:\nRừng đước bạt ngàn trải dài tít tắp đến tận mép biển xanh.\n\nÔng già Tư lặng lẽ ngồi trên mũi xuồng ba lá, mắt dõi theo đàn chim ríu rít tìm mồi sau những tán cây đước rậm rạp xanh tốt một màu bình yên.`;
+  const story = parseGeminiStory(plainText);
+  assert.equal(story.title, 'Người giữ rừng phương Nam');
+  assert.match(story.content, /Rừng đước bạt ngàn/);
+  assert.equal(story.wordCount > 10, true);
+});
+
+test('buildGeminiStoryPrompt đưa bối cảnh video thực tế vào prompt chống bịa đặt (hallucination)', () => {
+  const prompt = buildGeminiStoryPrompt({
+    duration: 35.5,
+    outputLanguage: 'vi',
+    videoSummary: 'Cô gái chăm sóc da mặt với kem dưỡng mắt trước gương phòng tắm buổi sáng',
+    globalContinuity: 'Cô gái trẻ tóc nâu cột cao, áo lụa trắng, phòng tắm lát đá marble sáng ấm áp',
+    planParts: [
+      { prompt: 'Cô gái mở nắp lọ kem dưỡng mắt và chấm nhẹ lên khóe mắt' },
+      { prompt: 'Cô gái mỉm cười hài lòng nhìn vào gương thấy làn da rạng ngời' }
+    ],
+    userPrompt: 'Nhấn mạnh sự tự tin của phụ nữ hiện đại'
+  });
+
+  assert.match(prompt, /kem dưỡng mắt trước gương phòng tắm/);
+  assert.match(prompt, /áo lụa trắng/);
+  assert.match(prompt, /Cô gái mở nắp lọ kem/);
+  assert.match(prompt, /Nhấn mạnh sự tự tin của phụ nữ hiện đại/);
+  assert.match(prompt, /KHÔNG LẠC ĐỀ/);
+  assert.match(prompt, /QUY TẮC ĐỊNH DẠNG JSON VÀ LỜI THOẠI/);
+});
+
+test('buildGeminiStoryRepairPrompt điều chỉnh chỉ dẫn theo từng lần thử retry', () => {
+  const jsonError = new SyntaxError("Expected ',' or '}' after property value in JSON at position 2280");
+  
+  // Attempt 2: Báo lỗi JSON quote và nhắc nhở
+  const attempt2 = buildGeminiStoryRepairPrompt(jsonError, { attempt: 2, videoSummary: 'Clip làm đẹp' });
+  assert.match(attempt2, /LỖI CÚ PHÁP JSON/);
+  assert.match(attempt2, /ngoặc kép cong/);
+  assert.match(attempt2, /Clip làm đẹp/);
+
+  // Attempt 3: Yêu cầu định dạng văn bản đơn giản (Tiêu đề: ... / Nội dung: ...)
+  const attempt3 = buildGeminiStoryRepairPrompt(jsonError, { attempt: 3, videoSummary: 'Clip làm đẹp' });
+  assert.match(attempt3, /ĐÚNG ĐỊNH DẠNG VĂN BẢN ĐƠN GIẢN/);
+  assert.match(attempt3, /Tiêu đề:/);
+  assert.match(attempt3, /Nội dung:/);
+});
+

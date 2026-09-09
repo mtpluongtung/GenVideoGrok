@@ -611,7 +611,7 @@ async function runQueue() {
               await saveJobs(jobs);
               const analysis = await generateStoryFromVideoWithGemini(job, metadata, (message) => {
                 job.message = message; saveJobsInBackground(job);
-              }, { isCancelled });
+              }, { isCancelled, videoPlan: plan, userPrompt: job.prompt });
               throwIfCancelled(isCancelled, 'Đã hủy sau khi viết truyện.');
               story = analysis.story;
               storySource = 'gemini';
@@ -738,7 +738,7 @@ async function runQueue() {
               await saveJobs(jobs);
               const analysis = await generateMasterStoryWithGemini(job, (message) => {
                 job.message = message; saveJobsInBackground(job);
-              }, { isCancelled });
+              }, { isCancelled, videoPlan: job.geminiPlan });
               throwIfCancelled(isCancelled, 'Đã hủy sau khi viết truyện.');
               story = analysis.story;
               job.geminiStory = story;
