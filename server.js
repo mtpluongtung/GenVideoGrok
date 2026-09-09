@@ -12,6 +12,7 @@ import {
   captureGeminiDiagnostics,
   closeGeminiBrowser,
   abortGemini,
+  describeVideoWithGemini,
   generateAutoTopicWithGemini,
   generateMasterStoryWithGemini,
   generateStoryFromVideoWithGemini,
@@ -546,52 +547,34 @@ async function runQueue() {
           job.sourceWidth = metadata.width;
           job.sourceHeight = metadata.height;
           job.aspectRatio = metadata.aspectRatio;
-          let plan = job.geminiPlan;
           const planFingerprint = geminiPlanFingerprint(job, metadata);
-          const legacyPlanIsCompatible = Boolean(plan?.parts?.length)
-            && !job.geminiPlanFingerprint
-            && !job.writeStory
-            && job.targetDuration == null
-            && job.language === 'auto'
-            && plan.parts.length === requiredParts;
-          if (plan?.parts?.length && plan.parts.length !== requiredParts) {
-            await logJob(job.id, 'gemini.plan.invalidated', {
-              reason: 'part_count_changed', cachedParts: plan.parts.length, requiredParts
-            });
-            plan = null;
-          } else if (plan?.parts?.length && job.geminiPlanFingerprint !== planFingerprint && !legacyPlanIsCompatible) {
-            await logJob(job.id, 'gemini.plan.invalidated', { reason: 'options_changed' });
-            plan = null;
-          }
-          if (!plan?.parts?.length) {
-            throwIfCancelled(isCancelled, 'Đã hủy trước khi lập kế hoạch Gemini.');
-            job.geminiPlan = null;
-            job.geminiPlanUrl = null;
-            job.stage = 'gemini'; await saveJobs(jobs);
-            const analysis = await analyzeVideoWithGemini(job, metadata, (message) => {
+
+          // BƯỚC 1 (LẦN 1): Gửi video lên Gemini -> Yêu cầu phân tích và trả về nội dung của video
+          if (!job.videoDescription) {
+            throwIfCancelled(isCancelled, 'Đã hủy trước khi phân tích nội dung video.');
+            job.stage = 'gemini_describe';
+            await saveJobs(jobs);
+            const descResult = await describeVideoWithGemini(job, metadata, (message) => {
               job.message = message; saveJobsInBackground(job);
             }, { isCancelled });
-            throwIfCancelled(isCancelled, 'Đã hủy sau khi lập kế hoạch Gemini.');
-            plan = analysis.plan;
-            const planFilename = `${job.id}-gemini-plan.json`;
-            await fs.writeFile(path.resolve('data/logs', planFilename), JSON.stringify({
-              createdAt: new Date().toISOString(), sourceDuration: metadata.duration,
-              requestedDuration: job.targetDuration ?? null, planningDuration,
-              language: job.language, languageLabel: videoLanguageLabel(job.language),
-              repaired: analysis.repaired, plan, rawResponse: analysis.rawResponse
-            }, null, 2), 'utf8');
-            job.geminiPlan = plan;
-            job.geminiPlanUrl = `/logs/${planFilename}`;
-            job.geminiPlanFingerprint = planFingerprint;
+            throwIfCancelled(isCancelled, 'Đã hủy sau khi phân tích nội dung video.');
+            job.videoDescription = descResult.videoDescription;
+            const descFilename = `${job.id}-video-description.txt`;
+            await fs.writeFile(path.resolve('data/logs', descFilename), job.videoDescription, 'utf8');
+            job.videoDescriptionUrl = `/logs/${descFilename}`;
             await saveJobs(jobs);
-            await logJob(job.id, 'gemini.plan.saved', {
-              planUrl: job.geminiPlanUrl, partCount: plan.parts.length,
-              planningDuration, language: job.language
+            await logJob(job.id, 'gemini.video_description.saved', {
+              descriptionLength: job.videoDescription.length,
+              descriptionUrl: job.videoDescriptionUrl
             });
           } else {
-            await logJob(job.id, 'gemini.plan.reused', { partCount: plan.parts.length, planUrl: job.geminiPlanUrl || null });
+            await logJob(job.id, 'gemini.video_description.reused', {
+              descriptionLength: job.videoDescription.length
+            });
           }
-          if (job.type === 'upload' && job.writeStory) {
+
+          // BƯỚC 2 (LẦN 2): Gửi nội dung vừa phân tích lên -> Yêu cầu Gemini sáng tác câu chuyện
+          if (job.type === 'upload') {
             const storyFilename = `${job.id}-story.txt`;
             const storyPath = path.resolve('data/outputs', storyFilename);
             const cachedStoryIsValid = Boolean(
@@ -611,7 +594,7 @@ async function runQueue() {
               await saveJobs(jobs);
               const analysis = await generateStoryFromVideoWithGemini(job, metadata, (message) => {
                 job.message = message; saveJobsInBackground(job);
-              }, { isCancelled, videoPlan: plan, userPrompt: job.prompt });
+              }, { isCancelled, videoDescription: job.videoDescription, userPrompt: job.prompt });
               throwIfCancelled(isCancelled, 'Đã hủy sau khi viết truyện.');
               story = analysis.story;
               storySource = 'gemini';
@@ -653,6 +636,52 @@ async function runQueue() {
                 await uploadJobStoryToTrendflare(job, story, job.thumbnailPath, { isCancelled });
               }
             }
+          }
+
+          // BƯỚC 3 (LẦN 3): Gửi video lên -> Yêu cầu Gemini viết prompt cho Grok tạo 1 video tương tự
+          let plan = job.geminiPlan;
+          const legacyPlanIsCompatible = Boolean(plan?.parts?.length)
+            && !job.geminiPlanFingerprint
+            && !job.writeStory
+            && job.targetDuration == null
+            && job.language === 'auto'
+            && plan.parts.length === requiredParts;
+          if (plan?.parts?.length && plan.parts.length !== requiredParts) {
+            await logJob(job.id, 'gemini.plan.invalidated', {
+              reason: 'part_count_changed', cachedParts: plan.parts.length, requiredParts
+            });
+            plan = null;
+          } else if (plan?.parts?.length && job.geminiPlanFingerprint !== planFingerprint && !legacyPlanIsCompatible) {
+            await logJob(job.id, 'gemini.plan.invalidated', { reason: 'options_changed' });
+            plan = null;
+          }
+          if (!plan?.parts?.length) {
+            throwIfCancelled(isCancelled, 'Đã hủy trước khi lập kế hoạch Gemini.');
+            job.geminiPlan = null;
+            job.geminiPlanUrl = null;
+            job.stage = 'gemini'; await saveJobs(jobs);
+            const analysis = await analyzeVideoWithGemini(job, metadata, (message) => {
+              job.message = message; saveJobsInBackground(job);
+            }, { isCancelled, videoDescription: job.videoDescription, story: job.geminiStory });
+            throwIfCancelled(isCancelled, 'Đã hủy sau khi lập kế hoạch Gemini.');
+            plan = analysis.plan;
+            const planFilename = `${job.id}-gemini-plan.json`;
+            await fs.writeFile(path.resolve('data/logs', planFilename), JSON.stringify({
+              createdAt: new Date().toISOString(), sourceDuration: metadata.duration,
+              requestedDuration: job.targetDuration ?? null, planningDuration,
+              language: job.language, languageLabel: videoLanguageLabel(job.language),
+              repaired: analysis.repaired, plan, rawResponse: analysis.rawResponse
+            }, null, 2), 'utf8');
+            job.geminiPlan = plan;
+            job.geminiPlanUrl = `/logs/${planFilename}`;
+            job.geminiPlanFingerprint = planFingerprint;
+            await saveJobs(jobs);
+            await logJob(job.id, 'gemini.plan.saved', {
+              planUrl: job.geminiPlanUrl, partCount: plan.parts.length,
+              planningDuration, language: job.language
+            });
+          } else {
+            await logJob(job.id, 'gemini.plan.reused', { partCount: plan.parts.length, planUrl: job.geminiPlanUrl || null });
           }
           const generated = [];
           for (let index = 0; index < plan.parts.length; index += 1) {

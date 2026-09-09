@@ -5,6 +5,7 @@ import {
   buildGeminiStoryPrompt,
   buildGeminiStoryRepairPrompt,
   buildGeminiStoryboardPrompt,
+  buildGeminiVideoDescriptionPrompt,
   buildGrokTextPartJob,
   buildGrokTopicPartJob,
   countWords,
@@ -15,6 +16,7 @@ import {
   parseGeminiMasterStory,
   parseGeminiStory,
   parseGeminiStoryboard,
+  parseGeminiVideoDescription,
   sourceCoverageRanges
 } from '../lib/prompt-plan.js';
 
@@ -334,4 +336,62 @@ test('buildGeminiStoryRepairPrompt điều chỉnh chỉ dẫn theo từng lần
   assert.match(attempt3, /Tiêu đề:/);
   assert.match(attempt3, /Nội dung:/);
 });
+
+test('buildGeminiVideoDescriptionPrompt yêu cầu phân tích toàn diện nội dung video và parseGeminiVideoDescription kiểm tra kết quả', () => {
+  const prompt = buildGeminiVideoDescriptionPrompt({
+    duration: 30.5,
+    userInstruction: 'Chú ý biểu cảm khuôn mặt',
+    outputLanguage: 'vi'
+  });
+
+  assert.match(prompt, /EXPERT VIDEO ANALYST/);
+  assert.match(prompt, /30\.5 giây/);
+  assert.match(prompt, /Chú ý biểu cảm khuôn mặt/);
+  assert.match(prompt, /CHỦ THỂ & NHÂN VẬT/);
+  assert.match(prompt, /BỐI CẢNH & KHÔNG GIAN/);
+  assert.match(prompt, /DIỄN BIẾN HÀNH ĐỘNG THEO THỜI GIAN/);
+  assert.match(prompt, /ÂM THANH & THOẠI/);
+  assert.match(prompt, /THÔNG ĐIỆP & TỔNG KẾT/);
+
+  // parseGeminiVideoDescription
+  const validDesc = 'Video quay cảnh một người phụ nữ trẻ tuổi đang thoa kem dưỡng da ban đêm trước gương trong phòng tắm cao cấp, ánh sáng ấm cúng.';
+  assert.equal(parseGeminiVideoDescription(validDesc), validDesc);
+  assert.throws(() => parseGeminiVideoDescription('Quá ngắn'), /quá ngắn hoặc bị thiếu/);
+  assert.throws(() => parseGeminiVideoDescription(''), /chưa trả về/);
+});
+
+test('buildGeminiStoryPrompt tiếp nhận videoDescription từ Lần 1 để sáng tác câu chuyện ở Lần 2', () => {
+  const videoDescription = 'Một kỹ sư hàng không đang kiểm tra động cơ phản lực trong nhà xưởng vào một đêm mưa gió.';
+  const prompt = buildGeminiStoryPrompt({
+    duration: 40,
+    outputLanguage: 'vi',
+    videoDescription,
+    userPrompt: 'Nhấn mạnh sự kiên trì'
+  });
+
+  assert.match(prompt, /NỘI DUNG CHI TIẾT CỦA VIDEO NGUỒN \(ĐÃ ĐƯỢC PHÂN TÍCH\)/);
+  assert.match(prompt, /kỹ sư hàng không đang kiểm tra động cơ/);
+  assert.match(prompt, /Nhấn mạnh sự kiên trì/);
+  assert.match(prompt, /TRÊN 2\.000 TỪ/i);
+});
+
+test('buildGeminiStoryboardPrompt tiếp nhận videoDescription và story để viết prompt cho Grok tạo video tương tự ở Lần 3', () => {
+  const prompt = buildGeminiStoryboardPrompt({
+    duration: 30,
+    targetDuration: 30,
+    clipSeconds: 15,
+    videoDescription: 'Một chàng trai trẻ chơi đàn piano cổ điển trên đỉnh núi lúc hoàng hôn rực rỡ.',
+    story: {
+      title: 'Bản sonata trên đỉnh mây',
+      content: 'Tiếng đàn vang vọng giữa không trung bao la...'
+    }
+  });
+
+  assert.match(prompt, /SIMILAR TO THE SOURCE VIDEO \(tạo 1 video tương tự video nguồn\)/);
+  assert.match(prompt, /VERIFIED SOURCE VIDEO CONTENT/);
+  assert.match(prompt, /chàng trai trẻ chơi đàn piano/);
+  assert.match(prompt, /LITERARY STORY CONTEXT/);
+  assert.match(prompt, /Bản sonata trên đỉnh mây/);
+});
+
 
