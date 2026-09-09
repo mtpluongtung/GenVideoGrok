@@ -13,6 +13,7 @@ import {
 } from '../lib/trendflare.js';
 import {
   buildGeminiMasterWriterPrompt,
+  buildGeminiMasterWriterRepairPrompt,
   parseGeminiMasterStory,
   buildGeminiThumbnailPrompt,
   buildGeminiStoryboardFromStoryPrompt,
@@ -140,6 +141,8 @@ test('buildGeminiTopicStoryPrompt tạo prompt yêu cầu cả câu chuyện và
   assert.match(prompt, /Chuyện chú mèo đi lạc/);
   assert.match(prompt, /30-second/);
   assert.match(prompt, /exactly 3 parts/);
+  assert.match(prompt, /OVER 2,000 WORDS/i);
+  assert.match(prompt, /trên 2\.000 từ/i);
   assert.match(prompt, /Tiếng Việt/);
   assert.match(prompt, /"title"/);
   assert.match(prompt, /"content"/);
@@ -167,9 +170,13 @@ test('parseGeminiTopicStoryPlan trích xuất đúng câu chuyện và mảng pa
   const parsed = parseGeminiTopicStoryPlan(mockJson, { targetDuration: 20, clipSeconds: 10 });
   assert.equal(parsed.title, 'Hành trình trở về');
   assert.match(parsed.content, /Ngày xửa ngày xưa/);
+  assert.equal(parsed.wordCount > 0, true);
   assert.equal(parsed.parts.length, 2);
   assert.equal(parsed.parts[0].prompt.includes('Part 1'), true);
   assert.equal(parsed.parts[1].prompt.includes('Part 2'), true);
+
+  // Kiểm tra minWords từ chối khi nội dung ngắn
+  assert.throws(() => parseGeminiTopicStoryPlan(mockJson, { targetDuration: 20, clipSeconds: 10, minWords: 100 }), /quá ngắn/);
 });
 
 test('buildGrokTopicStoryPartJob gắn đúng thông tin câu chuyện và continuity vào Grok prompt', () => {
@@ -208,6 +215,8 @@ test('buildGeminiMasterWriterPrompt đặt vai trò Nhà văn kiệt xuất và 
   assert.match(prompt, /MASTER LITERARY AUTHOR/);
   assert.match(prompt, /Tiếng chuông cổ thành/);
   assert.match(prompt, /KHÔNG tạo video/);
+  assert.match(prompt, /TRÊN 2\.000 TỪ/i);
+  assert.match(prompt, /2\.000 words/i);
 
   const mockStoryJson = JSON.stringify({
     title: 'Tiếng chuông cổ thành',
@@ -217,6 +226,16 @@ test('buildGeminiMasterWriterPrompt đặt vai trò Nhà văn kiệt xuất và 
   const parsed = parseGeminiMasterStory(mockStoryJson);
   assert.equal(parsed.title, 'Tiếng chuông cổ thành');
   assert.match(parsed.content, /Hoàng hôn buông xuống/);
+  assert.equal(parsed.wordCount > 0, true);
+
+  // Kiểm tra minWords từ chối khi nội dung ngắn
+  assert.throws(() => parseGeminiMasterStory(mockStoryJson, { minWords: 100 }), /quá ngắn/);
+
+  // Kiểm tra repair prompt Nhà văn kiệt xuất
+  const repair = buildGeminiMasterWriterRepairPrompt(new Error('truyện quá ngắn'), { outputLanguage: 'vi' });
+  assert.match(repair, /TRÊN 2\.000 TỪ/i);
+  assert.match(repair, /2\.000 words/i);
+  assert.match(repair, /truyện quá ngắn/);
 });
 
 test('buildGeminiThumbnailPrompt tạo chỉ dẫn hình ảnh 16:9 điện ảnh không chữ', () => {

@@ -7,8 +7,11 @@ import {
   buildGeminiStoryboardPrompt,
   buildGrokTextPartJob,
   buildGrokTopicPartJob,
+  countWords,
   expectedPartCount,
   formatGeminiStoryText,
+  MIN_STORY_WORDS,
+  MIN_STORY_WORDS_RETRY,
   parseGeminiStory,
   parseGeminiStoryboard,
   sourceCoverageRanges
@@ -161,14 +164,27 @@ test('chế độ Không thoại không xung đột với quy tắc giữ nội 
   assert.doesNotMatch(prompt, /Preserve[^\n]*dialogue/i);
 });
 
-test('prompt câu chuyện yêu cầu Gemini bám sát nhân vật và nội dung video nguồn', () => {
+test('prompt câu chuyện yêu cầu Gemini bám sát nhân vật, nội dung video nguồn và tối thiểu trên 2.000 từ', () => {
   const prompt = buildGeminiStoryPrompt({ duration: 37.24, outputLanguage: 'vi' });
   assert.match(prompt, /source video duration measured locally is 37\.24 seconds/i);
   assert.match(prompt, /characters, setting, important actions, event order/i);
   assert.match(prompt, /closely grounded in the source video/i);
+  assert.match(prompt, /OVER 2,000 WORDS/i);
+  assert.match(prompt, /trên 2\.000 từ/i);
   assert.match(prompt, /Tiếng Việt/);
   assert.match(prompt, /"title"/);
   assert.match(prompt, /"content"/);
+});
+
+test('countWords đếm chính xác số từ cho tiếng Việt và tiếng Anh', () => {
+  assert.equal(countWords(''), 0);
+  assert.equal(countWords('   '), 0);
+  assert.equal(countWords(null), 0);
+  assert.equal(countWords('Một hai ba bốn'), 4);
+  assert.equal(countWords('  Một   hai\n\nba   bốn  năm  '), 5);
+  assert.equal(countWords('This is a test sentence with eight words.'), 8);
+  assert.equal(MIN_STORY_WORDS, 2000);
+  assert.equal(MIN_STORY_WORDS_RETRY, 1500);
 });
 
 test('parser và formatter câu chuyện tạo đúng file text có Tiêu đề và Nội dung', () => {
@@ -179,19 +195,36 @@ test('parser và formatter câu chuyện tạo đúng file text có Tiêu đề 
   const story = parseGeminiStory(raw);
   assert.equal(story.title, 'Chiếc ô dưới cơn mưa');
   assert.match(story.content, /chú chó nhỏ/);
+  assert.equal(story.wordCount, countWords(story.content));
   assert.equal(
     formatGeminiStoryText(story),
     `Tiêu đề: ${story.title}\n\nNội dung:\n${story.content}\n`
   );
 });
 
-test('câu chuyện thiếu nội dung được từ chối và repair prompt yêu cầu lại đủ hai trường', () => {
+test('câu chuyện thiếu nội dung hoặc không đủ số từ được từ chối và repair prompt yêu cầu lại đủ hai trường trên 2.000 từ', () => {
   assert.throws(() => parseGeminiStory(JSON.stringify({
     title: 'Một tiêu đề', content: 'Quá ngắn.'
   })), /quá ngắn/);
+
+  // Kiểm tra ngưỡng minWords
+  assert.throws(() => parseGeminiStory(JSON.stringify({
+    title: 'Một tiêu đề',
+    content: 'Đây là một câu chuyện có độ dài trên 80 ký tự nhưng tổng số lượng từ của nó vẫn còn quá ít so với yêu cầu đề ra.'
+  }), { minWords: 100 }), /quá ngắn \(\d+ từ\)\. Yêu cầu tối thiểu trên 100 từ/);
+
+  // Khi đủ số từ với minWords
+  const sampleWords = Array.from({ length: 120 }, (_, i) => `từ${i + 1}`).join(' ');
+  const passed = parseGeminiStory(JSON.stringify({
+    title: 'Đủ độ dài', content: sampleWords
+  }), { minWords: 100 });
+  assert.equal(passed.wordCount, 120);
+
   const repair = buildGeminiStoryRepairPrompt(new Error('thiếu nội dung'), { outputLanguage: 'none' });
   assert.match(repair, /thiếu nội dung/);
   assert.match(repair, /uploaded source video/i);
+  assert.match(repair, /OVER 2,000 WORDS/i);
+  assert.match(repair, /trên 2\.000 từ/i);
   assert.match(repair, /"title" and "content"/);
   assert.match(repair, /Vietnamese/i);
 });

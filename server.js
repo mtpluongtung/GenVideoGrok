@@ -21,7 +21,7 @@ import {
   inspectGeminiPage,
   openGeminiLogin
 } from './lib/gemini.js';
-import { buildGrokAutoTopicPartJob, buildGrokTextPartJob, buildGrokTopicPartJob, buildGrokTopicStoryPartJob, expectedPartCount, formatGeminiStoryText } from './lib/prompt-plan.js';
+import { buildGrokAutoTopicPartJob, buildGrokTextPartJob, buildGrokTopicPartJob, buildGrokTopicStoryPartJob, countWords, expectedPartCount, formatGeminiStoryText } from './lib/prompt-plan.js';
 import { normalizeVideoLanguage, parseBooleanOption, parseTargetDuration, preferredClipSeconds, trendDateKey, videoLanguageLabel } from './lib/job-options.js';
 import { aspectRatioMatches, getVideoMetadata, inferAspectRatio, inferVideoResolution, joinParts } from './lib/video.js';
 import { buildPartReferences, isReferenceArtifact, maxReferenceImages, referenceDigest, removeReferenceFrames } from './lib/references.js';
@@ -632,6 +632,7 @@ async function runQueue() {
               storyUrl: job.storyUrl,
               title: story.title,
               contentLength: story.content.length,
+              wordCount: story.wordCount || countWords(story.content),
               source: storySource,
               repaired: Boolean(job.storyRepaired)
             });
@@ -752,6 +753,7 @@ async function runQueue() {
                 title: story.title,
                 storyUrl: job.storyUrl,
                 contentLength: story.content.length,
+                wordCount: story.wordCount || countWords(story.content),
                 repaired: analysis.repaired
               });
             } else {
