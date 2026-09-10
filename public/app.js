@@ -76,7 +76,7 @@ function updateOptions() {
   const reelsNote = postToReels.checked ? ' · Tự đăng Facebook Reels (9:16, ≤ 90s)' : '';
   const workflowSummary = `${workflow}${storyNote}${referenceNote}${trendflareNote}${reelsNote}.`;
   $('#workflowNote').textContent = type === 'topic' && !prompt.value.trim()
-    ? `Để trống: Gemini tìm xu hướng và viết kịch bản · ${workflowSummary}`
+    ? `Để trống: ChatGPT tìm xu hướng và viết kịch bản · ${workflowSummary}`
     : workflowSummary;
   saveOptionState();
 }
@@ -108,11 +108,11 @@ function selectType(button) {
   $('#form [name=video]').required = type === 'upload';
   $('#promptLabel').textContent = type === 'topic' ? 'Chủ đề (không bắt buộc)' : 'Chỉ dẫn bổ sung (không bắt buộc)';
   prompt.placeholder = type === 'topic'
-    ? 'Để trống để Gemini tìm xu hướng đang nổi và tự viết kịch bản, hoặc nhập chủ đề của bạn...'
+    ? 'Để trống để ChatGPT tìm xu hướng đang nổi và tự viết kịch bản, hoặc nhập chủ đề của bạn...'
     : 'Ví dụ: Giữ nhịp dựng nhanh hơn, không thêm chữ. Để trống nếu muốn bám sát video nguồn.';
   $('#promptHelp').textContent = type === 'topic'
-    ? 'Để trống: Gemini tìm xu hướng hiện tại, chọn ý tưởng và chia kịch bản theo đúng thời lượng.'
-    : 'Gemini sẽ phân tích video nguồn; chỉ dẫn này dùng để điều chỉnh kết quả nếu cần.';
+    ? 'Để trống: ChatGPT tìm xu hướng hiện tại, chọn ý tưởng và chia kịch bản theo đúng thời lượng.'
+    : 'ChatGPT sẽ phân tích video nguồn; chỉ dẫn này dùng để điều chỉnh kết quả nếu cần.';
   restoreOptionState();
 }
 
@@ -171,7 +171,7 @@ async function login(service) {
 }
 
 $('#loginGrok').onclick = () => login('grok');
-$('#loginGemini').onclick = () => login('gemini');
+$('#loginChatGPT').onclick = () => login('chatgpt');
 
 $('#form').onsubmit = async (event) => {
   event.preventDefault();
@@ -212,8 +212,8 @@ const reelLabels = {
 
 function jobTitle(job) {
   if (job.prompt) return job.prompt;
-  if (job.generatedTopic) return `Gemini chọn: ${job.generatedTopic}`;
-  if (job.autoTopic) return 'Gemini đang tìm chủ đề xu hướng…';
+  if (job.generatedTopic) return `ChatGPT chọn: ${job.generatedTopic}`;
+  if (job.autoTopic) return 'ChatGPT đang tìm chủ đề xu hướng…';
   return 'Tạo theo video nguồn';
 }
 
@@ -242,7 +242,7 @@ function renderJobCard(job) {
           <span class="chip">${escapeHtml(duration)}</span>
           <span class="chip">${escapeHtml(languageName)}</span>
           ${job.outputResolution ? `<span class="chip chip-info">${escapeHtml(job.outputResolution)}</span>` : ''}
-          ${job.autoTopic ? `<span class="chip">Gemini tự viết kịch bản</span>` : ''}
+          ${job.autoTopic ? `<span class="chip">ChatGPT tự viết kịch bản</span>` : ''}
           ${job.writeStory ? `<span class="chip chip-accent">Viết thêm câu chuyện</span>` : ''}
           ${job.useReferenceFrames ? `<span class="chip">Ảnh tham chiếu tự động</span>` : ''}
           ${job.referenceImageCount ? `<span class="chip chip-info">${job.referenceImageCount} ảnh của bạn</span>` : ''}
@@ -274,11 +274,11 @@ function renderJobCard(job) {
         ${job.trendflarePostUrl ? `<a href="${escapeHtml(job.trendflarePostUrl)}" target="_blank" rel="noopener" class="btn-trendflare">Xem bài viết Trendflare ↗</a>` : ''}
         ${job.reelUrl ? `<a href="${escapeHtml(job.reelUrl)}" target="_blank" rel="noopener" class="btn-reel">Xem Reels ↗</a>` : ''}
         ${storyUrl(job) ? `<a href="${escapeHtml(storyUrl(job))}" download class="btn-link">Tải câu chuyện ↓</a>` : ''}
-        ${job.geminiPlanUrl ? `<a href="${job.geminiPlanUrl}" target="_blank" class="btn-link">Kịch bản Gemini</a>` : ''}
+        ${job.aiPlanUrl ? `<a href="${job.aiPlanUrl}" target="_blank" class="btn-link">Kịch bản ChatGPT</a>` : ''}
         ${job.logUrl ? `<a href="${job.logUrl}" target="_blank" class="btn-link">Log</a>` : ''}
         ${['queued', 'running'].includes(job.status) ? `<button class="btn-cancel-job" data-cancel="${job.id}"${job.cancelRequested ? ' disabled' : ''}>${job.cancelRequested ? 'Đang hủy…' : '⨯ Hủy'}</button>` : ''}
         ${['failed', 'cancelled'].includes(job.status) ? `<button class="retry" data-retry="${job.id}" title="Tiếp tục từ đoạn còn dở, tái dùng clip đã có">Thử lại</button>` : ''}
-        ${['done', 'failed', 'cancelled'].includes(job.status) ? `<button class="retry" data-rerun="${job.id}" title="Giữ kịch bản Gemini, xóa clip cũ và dựng lại video">Tạo lại video</button>` : ''}
+        ${['done', 'failed', 'cancelled'].includes(job.status) ? `<button class="retry" data-rerun="${job.id}" title="Giữ kịch bản ChatGPT, xóa clip cũ và dựng lại video">Tạo lại video</button>` : ''}
         ${job.status !== 'running' ? `<button class="btn-delete-job" data-delete="${job.id}" title="Xóa tác vụ">✕ Xóa</button>` : ''}
       </div>
     </article>
@@ -296,7 +296,7 @@ function renderJobsList(jobs) {
   if (!filtered.length) {
     const emptyMsg = jobs.length
       ? 'Không có tác vụ nào khớp với bộ lọc.'
-      : 'Chưa có tác vụ. Có thể nhập chủ đề hoặc để trống để Gemini tìm xu hướng.';
+      : 'Chưa có tác vụ. Có thể nhập chủ đề hoặc để trống để ChatGPT tìm xu hướng.';
     $('#jobs').innerHTML = `<div class="empty">${emptyMsg}</div>`;
     return;
   }

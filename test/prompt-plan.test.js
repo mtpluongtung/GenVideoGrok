@@ -1,22 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildGeminiRepairPrompt,
-  buildGeminiStoryPrompt,
-  buildGeminiStoryRepairPrompt,
-  buildGeminiStoryboardPrompt,
-  buildGeminiVideoDescriptionPrompt,
+  buildRepairPrompt,
+  buildStoryPrompt,
+  buildStoryRepairPrompt,
+  buildStoryboardPrompt,
+  buildVideoDescriptionPrompt,
   buildGrokTextPartJob,
   buildGrokTopicPartJob,
   countWords,
   expectedPartCount,
-  formatGeminiStoryText,
+  formatStoryText,
   MIN_STORY_WORDS,
   MIN_STORY_WORDS_RETRY,
-  parseGeminiMasterStory,
-  parseGeminiStory,
-  parseGeminiStoryboard,
-  parseGeminiVideoDescription,
+  parseMasterStory,
+  parseStory,
+  parseStoryboard,
+  parseVideoDescription,
   sourceCoverageRanges
 } from '../lib/prompt-plan.js';
 
@@ -25,14 +25,14 @@ const continuity = 'The same adult subject, facial identity, blue jacket, warm s
 
 test('lập đúng 4 part cho video nguồn 35,97 giây', () => {
   assert.equal(expectedPartCount(35.97), 4);
-  const prompt = buildGeminiStoryboardPrompt({ duration: 35.97, userInstruction: '', aspectRatio: '9:16' });
+  const prompt = buildStoryboardPrompt({ duration: 35.97, userInstruction: '', aspectRatio: '9:16' });
   assert.match(prompt, /exactly 4 storyboard parts/i);
   assert.match(prompt, /"partNumber":4/);
   assert.match(prompt, /"sourceEndSeconds":35\.97/);
   assert.match(prompt, /target aspect ratio is 9:16/i);
 });
 
-test('đọc JSON Gemini trong code fence và không nhầm dấu ngoặc trong chuỗi', () => {
+test('đọc JSON ChatGPT trong code fence và không nhầm dấu ngoặc trong chuỗi', () => {
   const raw = `Here is the result:\n\`\`\`json\n${JSON.stringify({
     schemaVersion: 1,
     summary: 'A {short} source video',
@@ -42,26 +42,26 @@ test('đọc JSON Gemini trong code fence và không nhầm dấu ngoặc trong 
       { partNumber: 2, sourceStartSeconds: 10, sourceEndSeconds: 12, prompt: `${longPrompt} Closing section with a literal } symbol in a prop.` }
     ]
   })}\n\`\`\``;
-  const plan = parseGeminiStoryboard(raw, { duration: 12 });
+  const plan = parseStoryboard(raw, { duration: 12 });
   assert.equal(plan.parts.length, 2);
   assert.equal(plan.parts[1].sourceEndSeconds, 12);
   assert.match(plan.parts[1].prompt, /literal } symbol/);
 });
 
 test('từ chối plan thiếu part hoặc thiếu mô tả đồng nhất', () => {
-  assert.throws(() => parseGeminiStoryboard(JSON.stringify({
+  assert.throws(() => parseStoryboard(JSON.stringify({
     globalContinuity: continuity,
     parts: [{ partNumber: 1, prompt: longPrompt }]
   }), { duration: 12 }), /trả 1 part, cần đúng 2 part/);
 
-  assert.throws(() => parseGeminiStoryboard(JSON.stringify({
+  assert.throws(() => parseStoryboard(JSON.stringify({
     globalContinuity: 'too short',
     parts: [{ partNumber: 1, prompt: longPrompt }]
   }), { duration: 8 }), /globalContinuity/);
 });
 
 test('repair prompt ghi rõ lỗi và số part cần trả', () => {
-  const prompt = buildGeminiRepairPrompt(new Error('JSON lỗi'), 3);
+  const prompt = buildRepairPrompt(new Error('JSON lỗi'), 3);
   assert.match(prompt, /JSON lỗi/);
   assert.match(prompt, /exactly 3 parts/);
 });
@@ -107,7 +107,7 @@ test('thời lượng tùy chỉnh chia đều toàn bộ video nguồn thành �
     { partNumber: 1, sourceStartSeconds: 0, sourceEndSeconds: 18.62 },
     { partNumber: 2, sourceStartSeconds: 18.62, sourceEndSeconds: 37.24 }
   ]);
-  const prompt = buildGeminiStoryboardPrompt({
+  const prompt = buildStoryboardPrompt({
     duration: 37.24,
     targetDuration: 20,
     outputLanguage: 'vi',
@@ -127,7 +127,7 @@ test('parser chuẩn hóa range theo target duration thay vì tạo mốc vượ
       { partNumber: 2, sourceStartSeconds: 10, sourceEndSeconds: 20, prompt: `${longPrompt} Second compressed beat.` }
     ]
   });
-  const plan = parseGeminiStoryboard(raw, { duration: 37.24, targetDuration: 20 });
+  const plan = parseStoryboard(raw, { duration: 37.24, targetDuration: 20 });
   assert.equal(plan.parts.length, 2);
   assert.equal(plan.parts[0].sourceEndSeconds, 18.62);
   assert.equal(plan.parts[1].sourceStartSeconds, 18.62);
@@ -162,13 +162,13 @@ test('topic 30 giây tạo prompt riêng cho từng part và áp dụng ngôn ng
 });
 
 test('chế độ Không thoại không xung đột với quy tắc giữ nội dung nguồn', () => {
-  const prompt = buildGeminiStoryboardPrompt({ duration: 12, outputLanguage: 'none' });
+  const prompt = buildStoryboardPrompt({ duration: 12, outputLanguage: 'none' });
   assert.match(prompt, /Do not add spoken dialogue, narration, or voice-over/);
   assert.doesNotMatch(prompt, /Preserve[^\n]*dialogue/i);
 });
 
-test('prompt câu chuyện yêu cầu Gemini bám sát nhân vật, nội dung video nguồn và tối thiểu trên 2.000 từ', () => {
-  const prompt = buildGeminiStoryPrompt({ duration: 37.24, outputLanguage: 'vi' });
+test('prompt câu chuyện yêu cầu ChatGPT bám sát nhân vật, nội dung video nguồn và tối thiểu trên 2.000 từ', () => {
+  const prompt = buildStoryPrompt({ duration: 37.24, outputLanguage: 'vi' });
   assert.match(prompt, /source video duration measured locally is 37\.24 seconds/i);
   assert.match(prompt, /characters, setting, important actions, event order/i);
   assert.match(prompt, /closely grounded in the source video/i);
@@ -195,37 +195,37 @@ test('parser và formatter câu chuyện tạo đúng file text có Tiêu đề 
     title: 'Chiếc ô dưới cơn mưa',
     content: 'Lan bước qua con phố trong cơn mưa lớn. Cô che chiếc ô đỏ cho một chú chó nhỏ, rồi cùng nó tìm được đường về nhà trong ánh đèn ấm áp.'
   })}\n\`\`\``;
-  const story = parseGeminiStory(raw);
+  const story = parseStory(raw);
   assert.equal(story.title, 'Chiếc ô dưới cơn mưa');
   assert.match(story.content, /chú chó nhỏ/);
   assert.equal(story.wordCount, countWords(story.content));
   assert.equal(
-    formatGeminiStoryText(story),
+    formatStoryText(story),
     `Tiêu đề: ${story.title}\n\nNội dung:\n${story.content}\n`
   );
 });
 
 test('câu chuyện thiếu nội dung hoặc không đủ số từ được từ chối và repair prompt yêu cầu lại đủ hai trường trên 2.000 từ', () => {
-  assert.throws(() => parseGeminiStory(JSON.stringify({
+  assert.throws(() => parseStory(JSON.stringify({
     title: 'Một tiêu đề', content: 'Quá ngắn.'
   })), /quá ngắn/);
 
   // Kiểm tra ngưỡng minWords
-  assert.throws(() => parseGeminiStory(JSON.stringify({
+  assert.throws(() => parseStory(JSON.stringify({
     title: 'Một tiêu đề',
     content: 'Đây là một câu chuyện có độ dài trên 80 ký tự nhưng tổng số lượng từ của nó vẫn còn quá ít so với yêu cầu đề ra.'
   }), { minWords: 100 }), /quá ngắn \(\d+ từ\)\. Yêu cầu tối thiểu trên 100 từ/);
 
   // Khi đủ số từ với minWords
   const sampleWords = Array.from({ length: 120 }, (_, i) => `từ${i + 1}`).join(' ');
-  const passed = parseGeminiStory(JSON.stringify({
+  const passed = parseStory(JSON.stringify({
     title: 'Đủ độ dài', content: sampleWords
   }), { minWords: 100 });
   assert.equal(passed.wordCount, 120);
 
-  const repair = buildGeminiStoryRepairPrompt(new Error('thiếu nội dung'), { outputLanguage: 'none' });
+  const repair = buildStoryRepairPrompt(new Error('thiếu nội dung'), { outputLanguage: 'none' });
   assert.match(repair, /thiếu nội dung/);
-  assert.match(repair, /uploaded source video/i);
+  assert.match(repair, /source frames and video description/i);
   assert.match(repair, /OVER 2,000 WORDS/i);
   assert.match(repair, /trên 2\.000 từ/i);
   assert.match(repair, /"title" and "content"/);
@@ -248,8 +248,8 @@ test('khoảng phủ nguồn theo clip 15 giây bước đúng 15 giây', () => 
   ]);
 });
 
-test('prompt Gemini và Grok công bố đúng độ dài clip 15 giây', () => {
-  const storyboard = buildGeminiStoryboardPrompt({ duration: 45, aspectRatio: '16:9', clipSeconds: 15 });
+test('prompt ChatGPT và Grok công bố đúng độ dài clip 15 giây', () => {
+  const storyboard = buildStoryboardPrompt({ duration: 45, aspectRatio: '16:9', clipSeconds: 15 });
   assert.match(storyboard, /exactly 3 storyboard parts/i);
   assert.match(storyboard, /3 full 15-second clips/i);
   assert.doesNotMatch(storyboard, /10-second/);
@@ -270,38 +270,38 @@ test('prompt Gemini và Grok công bố đúng độ dài clip 15 giây', () => 
   assert.match(topic.prompt, /of a 60-second sequence/);
 });
 
-test('parseGeminiStory cứu thành công JSON chứa ngoặc kép chưa escape trong đối thoại nhân vật', () => {
+test('parseStory cứu thành công JSON chứa ngoặc kép chưa escape trong đối thoại nhân vật', () => {
   const malformedJson = `{\n  "title": "Bình minh trên biển",\n  "content": "Mặt trời vừa ló rạng trên đường chân trời xa xăm.\\n\\n"Chào buổi sáng," Hải mỉm cười nói với người bạn đồng hành. "Hôm nay biển thật lặng sóng và trong xanh."\\n\\nThuyền trưởng gật đầu đồng tình và kéo cánh buồm lên cao đón ngọn gió ban mai rực rỡ."\n}`;
   
   assert.throws(() => JSON.parse(malformedJson), /Unexpected token|Expected/);
 
-  const story = parseGeminiStory(malformedJson);
+  const story = parseStory(malformedJson);
   assert.equal(story.title, 'Bình minh trên biển');
   assert.match(story.content, /Chào buổi sáng/);
   assert.match(story.content, /Hải mỉm cười/);
   assert.equal(story.wordCount > 10, true);
 });
 
-test('parseGeminiMasterStory cứu thành công JSON chứa ngoặc kép chưa escape trong đối thoại', () => {
+test('parseMasterStory cứu thành công JSON chứa ngoặc kép chưa escape trong đối thoại', () => {
   const malformedJson = `{\n  "title": "Khúc tráng ca sông sâu",\n  "content": "Dòng sông mùa lũ cuộn trào đỏ nặng phù sa.\\n\\n"Bác Ba," người thanh niên cất tiếng hỏi giữa màn mưa giăng kín. "Chúng ta có qua sông kịp chuyến đò chiều nay không?"\\n\\nNgười lái đò im lặng nhìn ra giữa dòng nước cuồn cuộn sóng bạc đầu."\n}`;
 
   assert.throws(() => JSON.parse(malformedJson), /Unexpected token|Expected/);
-  const story = parseGeminiMasterStory(malformedJson);
+  const story = parseMasterStory(malformedJson);
   assert.equal(story.title, 'Khúc tráng ca sông sâu');
   assert.match(story.content, /Bác Ba/);
   assert.equal(story.wordCount > 10, true);
 });
 
-test('parseGeminiStory bóc tách đúng định dạng văn bản thô (Tiêu đề: ... Nội dung: ...)', () => {
+test('parseStory bóc tách đúng định dạng văn bản thô (Tiêu đề: ... Nội dung: ...)', () => {
   const plainText = `Tiêu đề: Người giữ rừng phương Nam\n\nNội dung:\nRừng đước bạt ngàn trải dài tít tắp đến tận mép biển xanh.\n\nÔng già Tư lặng lẽ ngồi trên mũi xuồng ba lá, mắt dõi theo đàn chim ríu rít tìm mồi sau những tán cây đước rậm rạp xanh tốt một màu bình yên.`;
-  const story = parseGeminiStory(plainText);
+  const story = parseStory(plainText);
   assert.equal(story.title, 'Người giữ rừng phương Nam');
   assert.match(story.content, /Rừng đước bạt ngàn/);
   assert.equal(story.wordCount > 10, true);
 });
 
-test('buildGeminiStoryPrompt đưa bối cảnh video thực tế vào prompt chống bịa đặt (hallucination)', () => {
-  const prompt = buildGeminiStoryPrompt({
+test('buildStoryPrompt đưa bối cảnh video thực tế vào prompt chống bịa đặt (hallucination)', () => {
+  const prompt = buildStoryPrompt({
     duration: 35.5,
     outputLanguage: 'vi',
     videoSummary: 'Cô gái chăm sóc da mặt với kem dưỡng mắt trước gương phòng tắm buổi sáng',
@@ -321,24 +321,24 @@ test('buildGeminiStoryPrompt đưa bối cảnh video thực tế vào prompt ch
   assert.match(prompt, /QUY TẮC ĐỊNH DẠNG JSON VÀ LỜI THOẠI/);
 });
 
-test('buildGeminiStoryRepairPrompt điều chỉnh chỉ dẫn theo từng lần thử retry', () => {
+test('buildStoryRepairPrompt điều chỉnh chỉ dẫn theo từng lần thử retry', () => {
   const jsonError = new SyntaxError("Expected ',' or '}' after property value in JSON at position 2280");
   
   // Attempt 2: Báo lỗi JSON quote và nhắc nhở
-  const attempt2 = buildGeminiStoryRepairPrompt(jsonError, { attempt: 2, videoSummary: 'Clip làm đẹp' });
+  const attempt2 = buildStoryRepairPrompt(jsonError, { attempt: 2, videoSummary: 'Clip làm đẹp' });
   assert.match(attempt2, /LỖI CÚ PHÁP JSON/);
   assert.match(attempt2, /ngoặc kép cong/);
   assert.match(attempt2, /Clip làm đẹp/);
 
   // Attempt 3: Yêu cầu định dạng văn bản đơn giản (Tiêu đề: ... / Nội dung: ...)
-  const attempt3 = buildGeminiStoryRepairPrompt(jsonError, { attempt: 3, videoSummary: 'Clip làm đẹp' });
+  const attempt3 = buildStoryRepairPrompt(jsonError, { attempt: 3, videoSummary: 'Clip làm đẹp' });
   assert.match(attempt3, /ĐÚNG ĐỊNH DẠNG VĂN BẢN ĐƠN GIẢN/);
   assert.match(attempt3, /Tiêu đề:/);
   assert.match(attempt3, /Nội dung:/);
 });
 
-test('buildGeminiVideoDescriptionPrompt yêu cầu phân tích toàn diện nội dung video và parseGeminiVideoDescription kiểm tra kết quả', () => {
-  const prompt = buildGeminiVideoDescriptionPrompt({
+test('buildVideoDescriptionPrompt yêu cầu phân tích toàn diện nội dung video và parseVideoDescription kiểm tra kết quả', () => {
+  const prompt = buildVideoDescriptionPrompt({
     duration: 30.5,
     userInstruction: 'Chú ý biểu cảm khuôn mặt',
     outputLanguage: 'vi'
@@ -353,16 +353,16 @@ test('buildGeminiVideoDescriptionPrompt yêu cầu phân tích toàn diện nộ
   assert.match(prompt, /ÂM THANH & THOẠI/);
   assert.match(prompt, /THÔNG ĐIỆP & TỔNG KẾT/);
 
-  // parseGeminiVideoDescription
+  // parseVideoDescription
   const validDesc = 'Video quay cảnh một người phụ nữ trẻ tuổi đang thoa kem dưỡng da ban đêm trước gương trong phòng tắm cao cấp, ánh sáng ấm cúng.';
-  assert.equal(parseGeminiVideoDescription(validDesc), validDesc);
-  assert.throws(() => parseGeminiVideoDescription('Quá ngắn'), /quá ngắn hoặc bị thiếu/);
-  assert.throws(() => parseGeminiVideoDescription(''), /chưa trả về/);
+  assert.equal(parseVideoDescription(validDesc), validDesc);
+  assert.throws(() => parseVideoDescription('Quá ngắn'), /quá ngắn hoặc bị thiếu/);
+  assert.throws(() => parseVideoDescription(''), /chưa trả về/);
 });
 
-test('buildGeminiStoryPrompt tiếp nhận videoDescription từ Lần 1 để sáng tác câu chuyện ở Lần 2', () => {
+test('buildStoryPrompt tiếp nhận videoDescription từ Lần 1 để sáng tác câu chuyện ở Lần 2', () => {
   const videoDescription = 'Một kỹ sư hàng không đang kiểm tra động cơ phản lực trong nhà xưởng vào một đêm mưa gió.';
-  const prompt = buildGeminiStoryPrompt({
+  const prompt = buildStoryPrompt({
     duration: 40,
     outputLanguage: 'vi',
     videoDescription,
@@ -375,8 +375,8 @@ test('buildGeminiStoryPrompt tiếp nhận videoDescription từ Lần 1 để s
   assert.match(prompt, /TRÊN 2\.000 TỪ/i);
 });
 
-test('buildGeminiStoryboardPrompt tiếp nhận videoDescription và story để viết prompt cho Grok tạo video tương tự ở Lần 3', () => {
-  const prompt = buildGeminiStoryboardPrompt({
+test('buildStoryboardPrompt tiếp nhận videoDescription và story để viết prompt cho Grok tạo video tương tự ở Lần 3', () => {
+  const prompt = buildStoryboardPrompt({
     duration: 30,
     targetDuration: 30,
     clipSeconds: 15,

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { chromium } from 'playwright';
 import { JobCancelledError, cancelRequested, isCancellation, throwIfCancelled } from '../lib/cancel.js';
-import { waitForGeminiResponse, abortGemini, generateStoryThumbnailWithGemini } from '../lib/gemini.js';
+import { waitForChatGPTResponse, abortChatGPT, generateStoryThumbnailWithChatGPT } from '../lib/chatgpt.js';
 import { abortGrok } from '../lib/grok.js';
 import { downloadYouTube } from '../lib/youtube.js';
 
@@ -32,9 +32,9 @@ test('throwIfCancelled không ném khi chưa yêu cầu hủy', () => {
   });
 });
 
-test('abortGemini và abortGrok an toàn khi browser chưa chạy hoặc không có trang', async () => {
+test('abortChatGPT và abortGrok an toàn khi browser chưa chạy hoặc không có trang', async () => {
   await assert.doesNotReject(async () => {
-    await abortGemini();
+    await abortChatGPT();
     await abortGrok();
   });
 });
@@ -52,9 +52,9 @@ test('downloadYouTube ném JobCancelledError ngay nếu isCancelled là true', a
   );
 });
 
-test('generateStoryThumbnailWithGemini dừng ngay nếu isCancelled là true', async () => {
+test('generateStoryThumbnailWithChatGPT dừng ngay nếu isCancelled là true', async () => {
   await assert.rejects(
-    generateStoryThumbnailWithGemini({ id: 'mock-job' }, { title: 'Test', content: 'Story' }, () => {}, {
+    generateStoryThumbnailWithChatGPT({ id: 'mock-job' }, { title: 'Test', content: 'Story' }, () => {}, {
       isCancelled: () => true
     }),
     (error) => {
@@ -64,15 +64,13 @@ test('generateStoryThumbnailWithGemini dừng ngay nếu isCancelled là true', 
   );
 });
 
-test('vòng chờ Gemini thoát ngay khi có yêu cầu hủy thay vì chờ hết timeout', async (t) => {
+test('vòng chờ ChatGPT thoát ngay khi có yêu cầu hủy thay vì chờ hết timeout', async (t) => {
   // Trang luôn ở trạng thái đang tạo, nên nếu không có cờ hủy thì sẽ chờ tới hết timeoutMs.
   const server = http.createServer((_request, response) => {
     response.setHeader('content-type', 'text/html');
     response.end(`
-      <response-container aria-busy="true">
-        <message-content><div class="markdown-main-panel">Đang soạn…</div></message-content>
-      </response-container>
-      <button aria-label="Stop generating">Dừng</button>
+      <div data-message-author-role="assistant"><div class="markdown result-streaming">Đang soạn…</div></div>
+      <button data-testid="stop-button" aria-label="Stop streaming">Dừng</button>
     `);
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -89,14 +87,14 @@ test('vòng chờ Gemini thoát ngay khi có yêu cầu hủy thay vì chờ h�
   const startedAt = Date.now();
 
   await assert.rejects(
-    waitForGeminiResponse(page, {
+    waitForChatGPTResponse(page, {
       timeoutMs: 60000,
       pollIntervalMs: 100,
       isCancelled: () => cancelled
     }),
     (error) => {
       assert.equal(isCancellation(error), true);
-      assert.match(error.message, /Đã hủy trong lúc chờ Gemini/);
+      assert.match(error.message, /Đã hủy trong lúc chờ ChatGPT/);
       return true;
     }
   );

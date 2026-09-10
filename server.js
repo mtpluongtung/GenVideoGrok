@@ -8,21 +8,21 @@ import { logJob, sanitizeError } from './lib/logger.js';
 import { downloadYouTube } from './lib/youtube.js';
 import { openLogin, inspectGrokPage, inspectLatestGeneration, configureGrokSettings, generateWithGrok, captureGrokDiagnostics, clipDurationWindow, closeBrowser, abortGrok } from './lib/grok.js';
 import {
-  analyzeVideoWithGemini,
-  captureGeminiDiagnostics,
-  closeGeminiBrowser,
-  abortGemini,
-  describeVideoWithGemini,
-  generateAutoTopicWithGemini,
-  generateMasterStoryWithGemini,
-  generateStoryFromVideoWithGemini,
-  generateStoryThumbnailWithGemini,
-  generateStoryboardFromStoryWithGemini,
-  generateTopicStoryWithGemini,
-  inspectGeminiPage,
-  openGeminiLogin
-} from './lib/gemini.js';
-import { buildGrokAutoTopicPartJob, buildGrokTextPartJob, buildGrokTopicPartJob, buildGrokTopicStoryPartJob, countWords, expectedPartCount, formatGeminiStoryText } from './lib/prompt-plan.js';
+  analyzeVideoWithChatGPT,
+  captureChatGPTDiagnostics,
+  closeChatGPTBrowser,
+  abortChatGPT,
+  describeVideoWithChatGPT,
+  generateAutoTopicWithChatGPT,
+  generateMasterStoryWithChatGPT,
+  generateStoryFromVideoWithChatGPT,
+  generateStoryThumbnailWithChatGPT,
+  generateStoryboardFromStoryWithChatGPT,
+  generateTopicStoryWithChatGPT,
+  inspectChatGPTPage,
+  openChatGPTLogin
+} from './lib/chatgpt.js';
+import { buildGrokAutoTopicPartJob, buildGrokTextPartJob, buildGrokTopicPartJob, buildGrokTopicStoryPartJob, countWords, expectedPartCount, formatStoryText } from './lib/prompt-plan.js';
 import { normalizeVideoLanguage, parseBooleanOption, parseTargetDuration, preferredClipSeconds, trendDateKey, videoLanguageLabel } from './lib/job-options.js';
 import { aspectRatioMatches, getVideoMetadata, inferAspectRatio, inferVideoResolution, joinParts } from './lib/video.js';
 import { buildPartReferences, isReferenceArtifact, maxReferenceImages, referenceDigest, removeReferenceFrames } from './lib/references.js';
@@ -80,7 +80,23 @@ function clipSecondsOf(job) {
 }
 
 let jobs = await loadJobs();
+// Jobs created while the app used Gemini stored their cached plan/story under gemini* keys.
+// Move them to the provider-neutral names so retry and rerun keep reusing that work.
+const LEGACY_JOB_FIELDS = Object.freeze({
+  geminiPlan: 'aiPlan',
+  geminiPlanUrl: 'aiPlanUrl',
+  geminiPlanFingerprint: 'aiPlanFingerprint',
+  geminiStory: 'aiStory',
+  geminiStoryFingerprint: 'aiStoryFingerprint',
+  geminiResearchDate: 'researchDate'
+});
+
 for (const job of jobs) {
+  for (const [legacy, current] of Object.entries(LEGACY_JOB_FIELDS)) {
+    if (!Object.hasOwn(job, legacy)) continue;
+    if (job[current] === undefined || job[current] === null) job[current] = job[legacy];
+    delete job[legacy];
+  }
   job.clipSeconds = clipSecondsOf(job);
   job.cancelRequested = false;
   if (job.error) job.error = sanitizeError(job.error);
@@ -98,7 +114,7 @@ let activeJobCanceller = null;
 
 function publicJob(job) {
   const {
-    sourcePath: _sourcePath, geminiPlan: _geminiPlan, geminiStory: _geminiStory,
+    sourcePath: _sourcePath, aiPlan: _aiPlan, aiStory: _aiStory,
     referenceImages: _referenceImages, ...safe
   } = job;
   const language = job.language || 'auto';
@@ -201,7 +217,7 @@ app.post('/api/jobs/:id/rerun', async (req, res) => {
   if (missingRerunReference) {
     return res.status(410).json({ error: `Ảnh tham chiếu ${path.basename(missingRerunReference)} không còn tồn tại.` });
   }
-  // "Tạo lại" chỉ dựng lại video: giữ nguyên kế hoạch Gemini đã cache, nhưng xóa clip cũ để
+  // "Tạo lại" chỉ dựng lại video: giữ nguyên kế hoạch ChatGPT đã cache, nhưng xóa clip cũ để
   // Grok thực sự tạo lại thay vì tái dùng đúng những đoạn đã có (khác với "Thử lại").
   const discarded = await removeJobArtifacts(job.id);
   await patchJob(job, {
@@ -210,7 +226,7 @@ app.post('/api/jobs/:id/rerun', async (req, res) => {
     cancelRequested: false, reelStatus: job.postToReels ? 'pending' : null, reelUrl: null, reelError: null
   });
   await logJob(job.id, 'job.rerun.queued', {
-    reuseGeminiPlan: Boolean(job.geminiPlan?.parts?.length), discardedParts: discarded
+    reuseAiPlan: Boolean(job.aiPlan?.parts?.length), discardedParts: discarded
   });
   res.json(publicJob(job)); void runQueue();
 });
@@ -222,15 +238,15 @@ app.post('/api/login/grok', async (_req, res) => {
   if (working) return res.status(409).json({ error: 'Hàng đợi đang chạy; không thể điều khiển cửa sổ Grok lúc này.' });
   try { res.json(await openLogin()); } catch (error) { res.status(500).json({ error: error.message }); }
 });
-app.post('/api/login/gemini', async (_req, res) => {
-  if (working) return res.status(409).json({ error: 'Hàng đợi đang chạy; không thể điều khiển cửa sổ Gemini lúc này.' });
-  try { res.json(await openGeminiLogin()); } catch (error) { res.status(500).json({ error: error.message }); }
+app.post('/api/login/chatgpt', async (_req, res) => {
+  if (working) return res.status(409).json({ error: 'Hàng đợi đang chạy; không thể điều khiển cửa sổ ChatGPT lúc này.' });
+  try { res.json(await openChatGPTLogin()); } catch (error) { res.status(500).json({ error: error.message }); }
 });
 app.get('/api/debug/grok', async (_req, res) => {
   try { res.json(await inspectGrokPage()); } catch (error) { res.status(500).json({ error: error.message }); }
 });
-app.get('/api/debug/gemini', async (_req, res) => {
-  try { res.json(await inspectGeminiPage()); } catch (error) { res.status(500).json({ error: error.message }); }
+app.get('/api/debug/chatgpt', async (_req, res) => {
+  try { res.json(await inspectChatGPTPage()); } catch (error) { res.status(500).json({ error: error.message }); }
 });
 app.post('/api/debug/grok/latest', async (_req, res) => {
   if (working) return res.status(409).json({ error: 'Hàng đợi đang chạy.' });
@@ -309,7 +325,7 @@ app.post('/api/jobs', receiveUpload, async (req, res) => {
     referenceImages: referenceFiles.map((file) => path.resolve(file.path)),
     aspectRatio: type === 'topic' ? (postToReels ? '9:16' : '16:9') : null, status: 'queued',
     message: type === 'topic' && !prompt
-      ? (autoStoryUpload ? 'Đang chờ Gemini viết truyện' : 'Đang chờ Gemini tìm xu hướng')
+      ? (autoStoryUpload ? 'Đang chờ ChatGPT viết truyện' : 'Đang chờ ChatGPT tìm xu hướng')
       : 'Đang chờ',
     createdAt: new Date().toISOString(), outputUrl: null, storyUrl: null, storyTitle: null, error: null, logUrl: null
   };
@@ -446,7 +462,7 @@ function partFingerprint(partJob, references = null) {
 
 function partManifestPath(file) { return `${file}.manifest.json`; }
 
-function geminiPlanFingerprint(job, metadata) {
+function sourcePlanFingerprint(job, metadata) {
   return crypto.createHash('sha256').update(JSON.stringify({
     schemaVersion: 4,
     clipSeconds: clipSecondsOf(job),
@@ -459,7 +475,7 @@ function geminiPlanFingerprint(job, metadata) {
   })).digest('hex');
 }
 
-function geminiAutoTopicFingerprint(job) {
+function autoTopicPlanFingerprint(job) {
   return crypto.createHash('sha256').update(JSON.stringify({
     schemaVersion: 2,
     mode: 'auto_viral_topic',
@@ -506,7 +522,7 @@ async function runQueue() {
           try { activeChildProcess.kill(); } catch {}
         }
         abortGrok().catch(() => {});
-        abortGemini().catch(() => {});
+        abortChatGPT().catch(() => {});
       };
       try {
         await patchJob(job, { status: 'running', stage: 'prepare', message: 'Đang chuẩn bị…', cancelRequested: false });
@@ -547,14 +563,14 @@ async function runQueue() {
           job.sourceWidth = metadata.width;
           job.sourceHeight = metadata.height;
           job.aspectRatio = metadata.aspectRatio;
-          const planFingerprint = geminiPlanFingerprint(job, metadata);
+          const planFingerprint = sourcePlanFingerprint(job, metadata);
 
-          // BƯỚC 1 (LẦN 1): Gửi video lên Gemini -> Yêu cầu phân tích và trả về nội dung của video
+          // BƯỚC 1 (LẦN 1): Gửi video lên ChatGPT -> Yêu cầu phân tích và trả về nội dung của video
           if (!job.videoDescription) {
             throwIfCancelled(isCancelled, 'Đã hủy trước khi phân tích nội dung video.');
-            job.stage = 'gemini_describe';
+            job.stage = 'chatgpt_describe';
             await saveJobs(jobs);
-            const descResult = await describeVideoWithGemini(job, metadata, (message) => {
+            const descResult = await describeVideoWithChatGPT(job, metadata, (message) => {
               job.message = message; saveJobsInBackground(job);
             }, { isCancelled });
             throwIfCancelled(isCancelled, 'Đã hủy sau khi phân tích nội dung video.');
@@ -563,55 +579,55 @@ async function runQueue() {
             await fs.writeFile(path.resolve('data/logs', descFilename), job.videoDescription, 'utf8');
             job.videoDescriptionUrl = `/logs/${descFilename}`;
             await saveJobs(jobs);
-            await logJob(job.id, 'gemini.video_description.saved', {
+            await logJob(job.id, 'chatgpt.video_description.saved', {
               descriptionLength: job.videoDescription.length,
               descriptionUrl: job.videoDescriptionUrl
             });
           } else {
-            await logJob(job.id, 'gemini.video_description.reused', {
+            await logJob(job.id, 'chatgpt.video_description.reused', {
               descriptionLength: job.videoDescription.length
             });
           }
 
-          // BƯỚC 2 (LẦN 2): Gửi nội dung vừa phân tích lên -> Yêu cầu Gemini sáng tác câu chuyện
+          // BƯỚC 2 (LẦN 2): Gửi nội dung vừa phân tích lên -> Yêu cầu ChatGPT sáng tác câu chuyện
           if (job.type === 'upload') {
             const storyFilename = `${job.id}-story.txt`;
             const storyPath = path.resolve('data/outputs', storyFilename);
             const cachedStoryIsValid = Boolean(
-              job.geminiStory?.title
-              && job.geminiStory?.content
-              && job.geminiStoryFingerprint === planFingerprint
+              job.aiStory?.title
+              && job.aiStory?.content
+              && job.aiStoryFingerprint === planFingerprint
             );
-            let story = cachedStoryIsValid ? job.geminiStory : null;
+            let story = cachedStoryIsValid ? job.aiStory : null;
             let storySource = 'cache';
             if (!story) {
               throwIfCancelled(isCancelled, 'Đã hủy trước khi viết truyện.');
-              job.geminiStory = null;
-              job.geminiStoryFingerprint = null;
+              job.aiStory = null;
+              job.aiStoryFingerprint = null;
               job.storyUrl = null;
               job.storyTitle = null;
-              job.stage = 'gemini_story';
+              job.stage = 'chatgpt_story';
               await saveJobs(jobs);
-              const analysis = await generateStoryFromVideoWithGemini(job, metadata, (message) => {
+              const analysis = await generateStoryFromVideoWithChatGPT(job, metadata, (message) => {
                 job.message = message; saveJobsInBackground(job);
               }, { isCancelled, videoDescription: job.videoDescription, userPrompt: job.prompt });
               throwIfCancelled(isCancelled, 'Đã hủy sau khi viết truyện.');
               story = analysis.story;
-              storySource = 'gemini';
-              job.geminiStory = story;
-              job.geminiStoryFingerprint = planFingerprint;
+              storySource = 'chatgpt';
+              job.aiStory = story;
+              job.aiStoryFingerprint = planFingerprint;
               job.storyRepaired = analysis.repaired;
               await saveJobs(jobs);
             }
             const storyFileExists = await fs.stat(storyPath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
-            if (!storyFileExists || storySource === 'gemini') {
-              await fs.writeFile(storyPath, formatGeminiStoryText(story), 'utf8');
+            if (!storyFileExists || storySource === 'chatgpt') {
+              await fs.writeFile(storyPath, formatStoryText(story), 'utf8');
               if (storySource === 'cache') storySource = 'cache_file_recreated';
             }
             job.storyTitle = story.title;
             job.storyUrl = `/outputs/${storyFilename}`;
             await saveJobs(jobs);
-            await logJob(job.id, 'gemini.story.saved', {
+            await logJob(job.id, 'chatgpt.story.saved', {
               storyUrl: job.storyUrl,
               title: story.title,
               contentLength: story.content.length,
@@ -622,9 +638,9 @@ async function runQueue() {
             if (job.autoStoryUpload && story) {
               if (!job.thumbnailUrl) {
                 throwIfCancelled(isCancelled, 'Đã hủy trước khi tạo ảnh thu nhỏ.');
-                job.stage = 'gemini_thumbnail';
+                job.stage = 'chatgpt_thumbnail';
                 await saveJobs(jobs);
-                const thumb = await generateStoryThumbnailWithGemini(job, story, (message) => {
+                const thumb = await generateStoryThumbnailWithChatGPT(job, story, (message) => {
                   job.message = message; saveJobsInBackground(job);
                 }, { isCancelled });
                 throwIfCancelled(isCancelled, 'Đã hủy sau khi tạo ảnh thu nhỏ.');
@@ -638,50 +654,50 @@ async function runQueue() {
             }
           }
 
-          // BƯỚC 3 (LẦN 3): Gửi video lên -> Yêu cầu Gemini viết prompt cho Grok tạo 1 video tương tự
-          let plan = job.geminiPlan;
+          // BƯỚC 3 (LẦN 3): Gửi video lên -> Yêu cầu ChatGPT viết prompt cho Grok tạo 1 video tương tự
+          let plan = job.aiPlan;
           const legacyPlanIsCompatible = Boolean(plan?.parts?.length)
-            && !job.geminiPlanFingerprint
+            && !job.aiPlanFingerprint
             && !job.writeStory
             && job.targetDuration == null
             && job.language === 'auto'
             && plan.parts.length === requiredParts;
           if (plan?.parts?.length && plan.parts.length !== requiredParts) {
-            await logJob(job.id, 'gemini.plan.invalidated', {
+            await logJob(job.id, 'chatgpt.plan.invalidated', {
               reason: 'part_count_changed', cachedParts: plan.parts.length, requiredParts
             });
             plan = null;
-          } else if (plan?.parts?.length && job.geminiPlanFingerprint !== planFingerprint && !legacyPlanIsCompatible) {
-            await logJob(job.id, 'gemini.plan.invalidated', { reason: 'options_changed' });
+          } else if (plan?.parts?.length && job.aiPlanFingerprint !== planFingerprint && !legacyPlanIsCompatible) {
+            await logJob(job.id, 'chatgpt.plan.invalidated', { reason: 'options_changed' });
             plan = null;
           }
           if (!plan?.parts?.length) {
-            throwIfCancelled(isCancelled, 'Đã hủy trước khi lập kế hoạch Gemini.');
-            job.geminiPlan = null;
-            job.geminiPlanUrl = null;
-            job.stage = 'gemini'; await saveJobs(jobs);
-            const analysis = await analyzeVideoWithGemini(job, metadata, (message) => {
+            throwIfCancelled(isCancelled, 'Đã hủy trước khi lập kế hoạch ChatGPT.');
+            job.aiPlan = null;
+            job.aiPlanUrl = null;
+            job.stage = 'chatgpt'; await saveJobs(jobs);
+            const analysis = await analyzeVideoWithChatGPT(job, metadata, (message) => {
               job.message = message; saveJobsInBackground(job);
-            }, { isCancelled, videoDescription: job.videoDescription, story: job.geminiStory });
-            throwIfCancelled(isCancelled, 'Đã hủy sau khi lập kế hoạch Gemini.');
+            }, { isCancelled, videoDescription: job.videoDescription, story: job.aiStory });
+            throwIfCancelled(isCancelled, 'Đã hủy sau khi lập kế hoạch ChatGPT.');
             plan = analysis.plan;
-            const planFilename = `${job.id}-gemini-plan.json`;
+            const planFilename = `${job.id}-chatgpt-plan.json`;
             await fs.writeFile(path.resolve('data/logs', planFilename), JSON.stringify({
               createdAt: new Date().toISOString(), sourceDuration: metadata.duration,
               requestedDuration: job.targetDuration ?? null, planningDuration,
               language: job.language, languageLabel: videoLanguageLabel(job.language),
               repaired: analysis.repaired, plan, rawResponse: analysis.rawResponse
             }, null, 2), 'utf8');
-            job.geminiPlan = plan;
-            job.geminiPlanUrl = `/logs/${planFilename}`;
-            job.geminiPlanFingerprint = planFingerprint;
+            job.aiPlan = plan;
+            job.aiPlanUrl = `/logs/${planFilename}`;
+            job.aiPlanFingerprint = planFingerprint;
             await saveJobs(jobs);
-            await logJob(job.id, 'gemini.plan.saved', {
-              planUrl: job.geminiPlanUrl, partCount: plan.parts.length,
+            await logJob(job.id, 'chatgpt.plan.saved', {
+              planUrl: job.aiPlanUrl, partCount: plan.parts.length,
               planningDuration, language: job.language
             });
           } else {
-            await logJob(job.id, 'gemini.plan.reused', { partCount: plan.parts.length, planUrl: job.geminiPlanUrl || null });
+            await logJob(job.id, 'chatgpt.plan.reused', { partCount: plan.parts.length, planUrl: job.aiPlanUrl || null });
           }
           const generated = [];
           for (let index = 0; index < plan.parts.length; index += 1) {
@@ -732,7 +748,7 @@ async function runQueue() {
             partCount: generated.length, output, sourceDuration: metadata.duration,
             requestedDuration: job.targetDuration ?? null, planningDuration, language: job.language,
             outputDuration: outputMetadata.duration, outputWidth: outputMetadata.width, outputHeight: outputMetadata.height,
-            durationPolicy: 'full_grok_clips', promptSource: 'gemini_video_analysis',
+            durationPolicy: 'full_grok_clips', promptSource: 'chatgpt_video_analysis',
             preferredResolution: '1080p', resolution: inferVideoResolution(outputMetadata.width, outputMetadata.height)
           });
           await Promise.all(generated.flatMap((file) => [
@@ -751,34 +767,34 @@ async function runQueue() {
             throw new Error(`Video cần ${totalParts} đoạn Grok, vượt giới hạn an toàn ${maxParts} đoạn.`);
           }
           const autoTopic = Boolean(job.autoTopic || (!job.prompt?.trim() && !job.autoStoryUpload));
-          let autoTopicPlan = autoTopic ? job.geminiPlan : null;
-          let topicStoryPlan = job.autoStoryUpload ? job.geminiPlan : null;
+          let autoTopicPlan = autoTopic ? job.aiPlan : null;
+          let topicStoryPlan = job.autoStoryUpload ? job.aiPlan : null;
           if (job.autoStoryUpload) {
-            let story = job.geminiStory;
+            let story = job.aiStory;
             // 1. Sáng tác truyện nghệ thuật với vai trò Nhà văn kiệt xuất
             if (!story?.title || !story?.content) {
               throwIfCancelled(isCancelled, 'Đã hủy trước khi viết truyện.');
-              job.geminiPlan = null;
-              job.geminiPlanUrl = null;
-              job.geminiStory = null;
+              job.aiPlan = null;
+              job.aiPlanUrl = null;
+              job.aiStory = null;
               job.storyUrl = null;
               job.storyTitle = null;
-              job.stage = 'gemini_story';
+              job.stage = 'chatgpt_story';
               await saveJobs(jobs);
-              const analysis = await generateMasterStoryWithGemini(job, (message) => {
+              const analysis = await generateMasterStoryWithChatGPT(job, (message) => {
                 job.message = message; saveJobsInBackground(job);
-              }, { isCancelled, videoPlan: job.geminiPlan });
+              }, { isCancelled, videoPlan: job.aiPlan });
               throwIfCancelled(isCancelled, 'Đã hủy sau khi viết truyện.');
               story = analysis.story;
-              job.geminiStory = story;
+              job.aiStory = story;
               job.storyTitle = story.title;
               job.generatedTopic = story.title;
               const storyFilename = `${job.id}-story.txt`;
               const storyPath = path.resolve('data/outputs', storyFilename);
-              await fs.writeFile(storyPath, formatGeminiStoryText(story), 'utf8');
+              await fs.writeFile(storyPath, formatStoryText(story), 'utf8');
               job.storyUrl = `/outputs/${storyFilename}`;
               await saveJobs(jobs);
-              await logJob(job.id, 'gemini.master_story.saved', {
+              await logJob(job.id, 'chatgpt.master_story.saved', {
                 title: story.title,
                 storyUrl: job.storyUrl,
                 contentLength: story.content.length,
@@ -790,19 +806,19 @@ async function runQueue() {
               job.generatedTopic ||= story.title;
             }
 
-            // 2. Tạo ảnh đại diện từ Gemini (16:9 cinematic illustration)
+            // 2. Tạo ảnh đại diện từ ChatGPT (16:9 cinematic illustration)
             if (!job.thumbnailUrl) {
               throwIfCancelled(isCancelled, 'Đã hủy trước khi tạo ảnh thu nhỏ.');
-              job.stage = 'gemini_thumbnail';
+              job.stage = 'chatgpt_thumbnail';
               await saveJobs(jobs);
-              const thumb = await generateStoryThumbnailWithGemini(job, story, (message) => {
+              const thumb = await generateStoryThumbnailWithChatGPT(job, story, (message) => {
                 job.message = message; saveJobsInBackground(job);
               }, { isCancelled });
               throwIfCancelled(isCancelled, 'Đã hủy sau khi tạo ảnh thu nhỏ.');
               job.thumbnailPath = thumb.thumbnailPath;
               job.thumbnailUrl = thumb.thumbnailUrl;
               await saveJobs(jobs);
-              await logJob(job.id, 'gemini.thumbnail.saved', {
+              await logJob(job.id, 'chatgpt.thumbnail.saved', {
                 thumbnailUrl: job.thumbnailUrl
               });
             }
@@ -817,16 +833,16 @@ async function runQueue() {
             // 4. Sau khi có câu chuyện, dựa trên câu chuyện đó để tạo kịch bản video
             if (!topicStoryPlan?.parts?.length || topicStoryPlan.parts.length !== totalParts) {
               throwIfCancelled(isCancelled, 'Đã hủy trước khi tạo kịch bản phân cảnh.');
-              job.geminiPlan = null;
-              job.geminiPlanUrl = null;
-              job.stage = 'gemini_storyboard';
+              job.aiPlan = null;
+              job.aiPlanUrl = null;
+              job.stage = 'chatgpt_storyboard';
               await saveJobs(jobs);
-              const planAnalysis = await generateStoryboardFromStoryWithGemini(job, story, (message) => {
+              const planAnalysis = await generateStoryboardFromStoryWithChatGPT(job, story, (message) => {
                 job.message = message; saveJobsInBackground(job);
               }, { isCancelled });
               throwIfCancelled(isCancelled, 'Đã hủy sau khi tạo kịch bản phân cảnh.');
               topicStoryPlan = planAnalysis.plan;
-              const planFilename = `${job.id}-gemini-plan.json`;
+              const planFilename = `${job.id}-chatgpt-plan.json`;
               await fs.writeFile(path.resolve('data/logs', planFilename), JSON.stringify({
                 createdAt: new Date().toISOString(),
                 mode: 'storyboard_from_master_story',
@@ -839,49 +855,49 @@ async function runQueue() {
                 plan: topicStoryPlan,
                 rawResponse: planAnalysis.rawResponse
               }, null, 2), 'utf8');
-              job.geminiPlan = topicStoryPlan;
-              job.geminiPlanUrl = `/logs/${planFilename}`;
+              job.aiPlan = topicStoryPlan;
+              job.aiPlanUrl = `/logs/${planFilename}`;
               await saveJobs(jobs);
-              await logJob(job.id, 'gemini.storyboard_from_story.saved', {
+              await logJob(job.id, 'chatgpt.storyboard_from_story.saved', {
                 title: story.title,
                 storyUrl: job.storyUrl,
-                planUrl: job.geminiPlanUrl,
+                planUrl: job.aiPlanUrl,
                 partCount: topicStoryPlan.parts.length,
                 repaired: planAnalysis.repaired
               });
             }
           } else if (autoTopic) {
             job.autoTopic = true;
-            const planFingerprint = geminiAutoTopicFingerprint(job);
+            const planFingerprint = autoTopicPlanFingerprint(job);
             if (autoTopicPlan?.parts?.length && (
-              autoTopicPlan.parts.length !== totalParts || job.geminiPlanFingerprint !== planFingerprint
+              autoTopicPlan.parts.length !== totalParts || job.aiPlanFingerprint !== planFingerprint
             )) {
-              await logJob(job.id, 'gemini.auto_topic.plan.invalidated', {
+              await logJob(job.id, 'chatgpt.auto_topic.plan.invalidated', {
                 cachedParts: autoTopicPlan.parts.length,
                 requiredParts: totalParts,
                 reason: autoTopicPlan.parts.length !== totalParts ? 'part_count_changed' : 'options_changed'
               });
               autoTopicPlan = null;
               job.generatedTopic = null;
-              job.geminiResearchDate = null;
+              job.researchDate = null;
               job.trendSourceCount = null;
             }
             if (!autoTopicPlan?.parts?.length) {
               throwIfCancelled(isCancelled, 'Đã hủy trước khi nghiên cứu chủ đề.');
-              job.geminiPlan = null;
-              job.geminiPlanUrl = null;
-              job.stage = 'gemini'; await saveJobs(jobs);
-              const analysis = await generateAutoTopicWithGemini(job, (message) => {
+              job.aiPlan = null;
+              job.aiPlanUrl = null;
+              job.stage = 'chatgpt'; await saveJobs(jobs);
+              const analysis = await generateAutoTopicWithChatGPT(job, (message) => {
                 job.message = message; saveJobsInBackground(job);
               }, { isCancelled });
               throwIfCancelled(isCancelled, 'Đã hủy sau khi nghiên cứu chủ đề.');
               autoTopicPlan = analysis.plan;
-              const planFilename = `${job.id}-gemini-plan.json`;
-              const searchEvidence = autoTopicPlan.sources.length ? 'source_urls_returned' : 'not_exposed_by_gemini_web';
+              const planFilename = `${job.id}-chatgpt-plan.json`;
+              const searchEvidence = autoTopicPlan.sources.length ? 'source_urls_returned' : 'not_exposed_by_chatgpt_web';
               await fs.writeFile(path.resolve('data/logs', planFilename), JSON.stringify({
                 createdAt: new Date().toISOString(),
                 mode: 'auto_viral_topic',
-                groundingMode: 'gemini_web_search_prompt',
+                groundingMode: 'chatgpt_web_search_prompt',
                 searchEvidence,
                 researchDate: analysis.researchDate,
                 requestedDuration: targetDuration,
@@ -892,15 +908,15 @@ async function runQueue() {
                 plan: autoTopicPlan,
                 rawResponse: analysis.rawResponse
               }, null, 2), 'utf8');
-              job.geminiPlan = autoTopicPlan;
-              job.geminiPlanUrl = `/logs/${planFilename}`;
-              job.geminiPlanFingerprint = planFingerprint;
+              job.aiPlan = autoTopicPlan;
+              job.aiPlanUrl = `/logs/${planFilename}`;
+              job.aiPlanFingerprint = planFingerprint;
               job.generatedTopic = autoTopicPlan.selectedTopic || autoTopicPlan.summary;
-              job.geminiResearchDate = analysis.researchDate;
+              job.researchDate = analysis.researchDate;
               job.trendSourceCount = autoTopicPlan.sources.length;
               await saveJobs(jobs);
-              await logJob(job.id, 'gemini.auto_topic.plan.saved', {
-                planUrl: job.geminiPlanUrl,
+              await logJob(job.id, 'chatgpt.auto_topic.plan.saved', {
+                planUrl: job.aiPlanUrl,
                 selectedTopic: job.generatedTopic,
                 partCount: totalParts,
                 targetDuration,
@@ -909,16 +925,16 @@ async function runQueue() {
               });
             } else {
               job.generatedTopic ||= autoTopicPlan.selectedTopic || autoTopicPlan.summary;
-              await logJob(job.id, 'gemini.auto_topic.plan.reused', {
+              await logJob(job.id, 'chatgpt.auto_topic.plan.reused', {
                 partCount: autoTopicPlan.parts.length,
-                planUrl: job.geminiPlanUrl || null,
+                planUrl: job.aiPlanUrl || null,
                 selectedTopic: job.generatedTopic
               });
             }
           }
           await logJob(job.id, 'topic.storyboard.created', {
             partCount: totalParts, targetDuration, language: job.language,
-            promptSource: job.autoStoryUpload ? 'gemini_topic_story' : (autoTopic ? 'gemini_current_trend_research' : 'user_topic')
+            promptSource: job.autoStoryUpload ? 'chatgpt_topic_story' : (autoTopic ? 'chatgpt_current_trend_research' : 'user_topic')
           });
           const makePartJob = (index, references) => {
             if (job.autoStoryUpload && topicStoryPlan) {
@@ -1002,7 +1018,7 @@ async function runQueue() {
           job.outputResolution = inferVideoResolution(outputMetadata.width, outputMetadata.height);
           await logJob(job.id, 'topic.output.completed', {
             partCount: totalParts, targetDuration, language: job.language,
-            promptSource: autoTopic ? 'gemini_current_trend_research' : 'user_topic',
+            promptSource: autoTopic ? 'chatgpt_current_trend_research' : 'user_topic',
             generatedTopic: autoTopic ? job.generatedTopic : null,
             outputDuration: outputMetadata.duration, outputWidth: outputMetadata.width, outputHeight: outputMetadata.height,
             preferredResolution: '1080p', resolution: job.outputResolution
@@ -1022,8 +1038,9 @@ async function runQueue() {
           });
           continue;
         }
-        if (job.stage === 'gemini' || job.stage === 'gemini_story') {
-          await captureGeminiDiagnostics(job.id, error).catch(() => {});
+        // Every ChatGPT stage (describe, story, thumbnail, storyboard, plan) gets a page dump on failure.
+        if (String(job.stage || '').startsWith('chatgpt')) {
+          await captureChatGPTDiagnostics(job.id, error).catch(() => {});
         }
         if (job.stage === 'grok') await captureGrokDiagnostics(job.id, error).catch(() => {});
         const safeError = sanitizeError(error);
@@ -1048,7 +1065,7 @@ app.delete('/api/jobs/:id', async (req, res) => {
     ...(job.referenceImages || []),
     job.outputUrl && path.join(dataDir, job.outputUrl.replace(/^\//, '')),
     job.storyUrl && path.join(dataDir, job.storyUrl.replace(/^\//, '')),
-    job.geminiPlanUrl && path.join(dataDir, job.geminiPlanUrl.replace(/^\//, ''))
+    job.aiPlanUrl && path.join(dataDir, job.aiPlanUrl.replace(/^\//, ''))
   ].filter(Boolean)) await fs.rm(file, { force: true }).catch(() => {});
   jobs = jobs.filter((item) => item.id !== job.id); await saveJobs(jobs); res.json({ ok: true });
 });
@@ -1058,4 +1075,4 @@ app.listen(port, '127.0.0.1', () => {
   console.log(`Grok Video Studio: http://localhost:${port}`);
   void runQueue();
 });
-process.on('SIGINT', async () => { await Promise.all([closeBrowser(), closeGeminiBrowser()]); process.exit(0); });
+process.on('SIGINT', async () => { await Promise.all([closeBrowser(), closeChatGPTBrowser()]); process.exit(0); });

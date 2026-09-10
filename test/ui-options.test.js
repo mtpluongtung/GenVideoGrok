@@ -61,14 +61,14 @@ test('form nhớ riêng thời lượng và ngôn ngữ khi chuyển chế độ
   assert.equal(await language.inputValue(), 'vi');
 });
 
-test('chế độ Chủ đề cho phép để trống để Gemini tự tìm xu hướng', async (t) => {
+test('chế độ Chủ đề cho phép để trống để ChatGPT tự tìm xu hướng', async (t) => {
   const page = await appPage(t);
   const prompt = page.locator('[name=prompt]');
 
   assert.equal(await prompt.getAttribute('required'), null);
   assert.equal(await prompt.evaluate((element) => element.checkValidity()), true);
-  assert.match(await prompt.getAttribute('placeholder'), /để trống.*Gemini.*xu hướng/i);
-  assert.match(await page.locator('#workflowNote').innerText(), /để trống.*Gemini.*xu hướng/i);
+  assert.match(await prompt.getAttribute('placeholder'), /để trống.*ChatGPT.*xu hướng/i);
+  assert.match(await page.locator('#workflowNote').innerText(), /để trống.*ChatGPT.*xu hướng/i);
 
   await page.getByRole('button', { name: 'Video gốc' }).click();
   await page.getByRole('button', { name: 'Chủ đề' }).click();
@@ -83,7 +83,7 @@ test('nội dung prompt được nhớ riêng, không rò từ Video sang Chủ 
   await prompt.fill('Chỉ dẫn riêng cho video nguồn');
   await page.getByRole('button', { name: 'Chủ đề' }).click();
   assert.equal(await prompt.inputValue(), '');
-  assert.match(await page.locator('#workflowNote').innerText(), /Gemini.*xu hướng/i);
+  assert.match(await page.locator('#workflowNote').innerText(), /ChatGPT.*xu hướng/i);
 
   await prompt.fill('Chủ đề do người dùng nhập');
   await page.getByRole('button', { name: 'Video gốc' }).click();
@@ -311,5 +311,5 @@ test('nút Tạo lại video nói rõ là giữ kịch bản và chỉ dựng l�
 
   const rerun = page.locator('[data-rerun]');
   assert.match(await rerun.innerText(), /Tạo lại video/);
-  assert.match(await rerun.getAttribute('title'), /Giữ kịch bản Gemini.*dựng lại video/);
+  assert.match(await rerun.getAttribute('title'), /Giữ kịch bản ChatGPT.*dựng lại video/);
 });

@@ -68,7 +68,7 @@ test('từ chối video sai chuẩn Reels trước khi tải lên', () => {
   assert.equal(REEL_LIMITS.maxSeconds, 90);
 });
 
-test('caption ưu tiên chủ đề Gemini rồi tới tiêu đề truyện và prompt', () => {
+test('caption ưu tiên chủ đề ChatGPT rồi tới tiêu đề truyện và prompt', () => {
   assert.equal(buildReelDescription({ generatedTopic: 'Chủ đề nóng', prompt: 'bỏ qua' }, config), 'Chủ đề nóng');
   assert.equal(buildReelDescription({ storyTitle: 'Tiêu đề truyện' }, config), 'Tiêu đề truyện');
   assert.equal(buildReelDescription({ prompt: 'Prompt tự nhập' }, config), 'Prompt tự nhập');

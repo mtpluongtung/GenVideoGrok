@@ -22,11 +22,11 @@
           <h1>Grok Video Studio</h1>
           <span class="eyebrow">AUTOMATION</span>
         </div>
-        <p class="brand-tagline">Tạo video tự động với Grok &amp; Gemini</p>
+        <p class="brand-tagline">Tạo video tự động với Grok &amp; ChatGPT</p>
       </div>
     </div>
     <div class="login-actions">
-      <button id="loginGemini" class="secondary" title="Đăng nhập tài khoản Gemini">Đăng nhập Gemini ↗</button>
+      <button id="loginChatGPT" class="secondary" title="Đăng nhập tài khoản ChatGPT">Đăng nhập ChatGPT ↗</button>
       <button id="loginGrok" class="secondary" title="Đăng nhập tài khoản Grok">Đăng nhập Grok ↗</button>
     </div>
   </header>
@@ -67,8 +67,8 @@
         <!-- PROMPT / CHỦ ĐỀ -->
         <label class="field-box prompt-box">
           <span id="promptLabel" class="field-title">Chủ đề (không bắt buộc)</span>
-          <textarea name="prompt" rows="3" placeholder="Để trống để Gemini tìm xu hướng đang nổi và tự viết kịch bản, hoặc nhập chủ đề của bạn..."></textarea>
-          <small id="promptHelp">Để trống: Gemini tìm xu hướng hiện tại, chọn ý tưởng và chia kịch bản theo đúng thời lượng.</small>
+          <textarea name="prompt" rows="3" placeholder="Để trống để ChatGPT tìm xu hướng đang nổi và tự viết kịch bản, hoặc nhập chủ đề của bạn..."></textarea>
+          <small id="promptHelp">Để trống: ChatGPT tìm xu hướng hiện tại, chọn ý tưởng và chia kịch bản theo đúng thời lượng.</small>
         </label>
 
         <!-- CẤU HÌNH CƠ BẢN: THỜI LƯỢNG & NGÔN NGỮ -->
@@ -141,7 +141,7 @@
               <input id="writeStory" name="writeStory" type="checkbox" value="true" aria-describedby="storyHelp" disabled>
               <span>Viết câu chuyện dựa trên video</span>
             </label>
-            <small id="storyHelp">Gemini sẽ sáng tác thêm một tác phẩm truyện trường đoạn dài trên 2.000 từ bám sát video, rồi lưu Tiêu đề và Nội dung thành file .txt. Luồng tạo video không thay đổi.</small>
+            <small id="storyHelp">ChatGPT sẽ sáng tác thêm một tác phẩm truyện trường đoạn dài trên 2.000 từ bám sát video, rồi lưu Tiêu đề và Nội dung thành file .txt. Luồng tạo video không thay đổi.</small>
           </div>
 
           <!-- TỰ ĐĂNG REELS -->
@@ -158,7 +158,7 @@
         <div class="formfoot">
           <div class="workflow-box">
             <span class="workflow-icon">⚡</span>
-            <small id="workflowNote">Để trống: Gemini tìm xu hướng và viết 1 part × 10 giây; ưu tiên 1080p, tự động dùng 720p nếu không có.</small>
+            <small id="workflowNote">Để trống: ChatGPT tìm xu hướng và viết 1 part × 10 giây; ưu tiên 1080p, tự động dùng 720p nếu không có.</small>
           </div>
           <button type="submit" class="primary">Thêm vào hàng đợi →</button>
         </div>

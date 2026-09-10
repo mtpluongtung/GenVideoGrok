@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildGeminiAutoTopicPrompt,
-  buildGeminiAutoTopicRepairPrompt,
-  parseGeminiAutoTopicPlan
+  buildAutoTopicPrompt,
+  buildAutoTopicRepairPrompt,
+  parseAutoTopicPlan
 } from '../lib/prompt-plan.js';
 
 const continuity = 'The same adult Vietnamese host, facial identity, cobalt shirt, warm studio lighting, clean wooden table, energetic camera language, and upbeat audio identity remain unchanged.';
@@ -21,15 +21,15 @@ function validPlan(partCount, extras = {}) {
   };
 }
 
-test('prompt auto-topic yêu cầu Gemini kiểm tra xu hướng hiện tại và nhận đủ thời lượng/ngôn ngữ', () => {
-  const prompt = buildGeminiAutoTopicPrompt({
+test('prompt auto-topic yêu cầu ChatGPT kiểm tra xu hướng hiện tại và nhận đủ thời lượng/ngôn ngữ', () => {
+  const prompt = buildAutoTopicPrompt({
     targetDuration: 30,
     outputLanguage: 'vi',
     currentDate: '2026-08-26'
   });
 
   assert.match(prompt, /2026-08-26/);
-  assert.match(prompt, /Google Search/i);
+  assert.match(prompt, /web search/i);
   assert.match(prompt, /(?:current|recent|viral|trending).*(?:trend|topic)|(?:trend|topic).*(?:current|recent|viral|trending)/i);
   assert.match(prompt, /(?:target|requested|final)[^\n]*30 seconds/i);
   assert.match(prompt, /exactly 3 (?:storyboard )?parts/i);
@@ -48,7 +48,7 @@ test('parser auto-topic chấp nhận và giữ metadata xu hướng tùy chọn
     ]
   }))}\n\`\`\``;
 
-  const plan = parseGeminiAutoTopicPlan(raw, { targetDuration: 20 });
+  const plan = parseAutoTopicPlan(raw, { targetDuration: 20 });
   assert.equal(plan.parts.length, 2);
   assert.equal(plan.parts[0].partNumber, 1);
   assert.equal(plan.parts[1].partNumber, 2);
@@ -63,7 +63,7 @@ test('parser bỏ qua JSON phụ sai schema và lấy storyboard hợp lệ phí
     trendRationale: 'A recent source documents why this subject is timely this week.',
     sources: [{ title: 'Recent report', url: 'https://example.com/recent-report' }]
   });
-  const plan = parseGeminiAutoTopicPlan(`Research metadata: {"query":"current trend"}\n${JSON.stringify(planData)}`, {
+  const plan = parseAutoTopicPlan(`Research metadata: {"query":"current trend"}\n${JSON.stringify(planData)}`, {
     targetDuration: 10
   });
   assert.equal(plan.selectedTopic, 'A verified current science topic');
@@ -72,11 +72,11 @@ test('parser bỏ qua JSON phụ sai schema và lấy storyboard hợp lệ phí
 
 test('parser auto-topic bắt buộc chủ đề, căn cứ và ít nhất một nguồn web', () => {
   assert.throws(
-    () => parseGeminiAutoTopicPlan(JSON.stringify(validPlan(1)), { targetDuration: 10 }),
+    () => parseAutoTopicPlan(JSON.stringify(validPlan(1)), { targetDuration: 10 }),
     /chủ đề xu hướng/
   );
   assert.throws(
-    () => parseGeminiAutoTopicPlan(JSON.stringify(validPlan(1, {
+    () => parseAutoTopicPlan(JSON.stringify(validPlan(1, {
       selectedTopic: 'A current topic',
       trendRationale: 'A sufficiently detailed current trend rationale without a source.'
     })), { targetDuration: 10 }),
@@ -84,21 +84,21 @@ test('parser auto-topic bắt buộc chủ đề, căn cứ và ít nhất một
   );
 });
 
-test('repair auto-topic nhắc lại thời lượng, part và nguồn Google Search', () => {
-  const prompt = buildGeminiAutoTopicRepairPrompt(new Error('thiếu nguồn'), {
+test('repair auto-topic nhắc lại thời lượng, part và nguồn tìm kiếm web', () => {
+  const prompt = buildAutoTopicRepairPrompt(new Error('thiếu nguồn'), {
     expectedParts: 3,
     targetDuration: 30,
     currentDate: '2026-08-26'
   });
   assert.match(prompt, /30-second/i);
   assert.match(prompt, /exactly 3 parts/i);
-  assert.match(prompt, /Google Search/i);
+  assert.match(prompt, /web search/i);
   assert.match(prompt, /source URL/i);
 });
 
 test('parser auto-topic từ chối số part không khớp thời lượng đích', () => {
   assert.throws(
-    () => parseGeminiAutoTopicPlan(JSON.stringify(validPlan(2)), { targetDuration: 30 }),
+    () => parseAutoTopicPlan(JSON.stringify(validPlan(2)), { targetDuration: 30 }),
     /(?:trả|contains|has) 2 part.*(?:cần|expected|requires) (?:đúng )?3 part/i
   );
 });
