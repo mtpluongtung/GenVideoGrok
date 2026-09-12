@@ -80,6 +80,9 @@ function updateOptions() {
   $('#workflowNote').textContent = type === 'topic' && !prompt.value.trim()
     ? `Để trống: ChatGPT tìm xu hướng và viết kịch bản · ${workflowSummary}`
     : workflowSummary;
+  document.querySelectorAll('.quick-duration-btn').forEach((btn) => {
+    btn.classList.toggle('active', durationMode.value === 'custom' && durationSeconds.value === btn.dataset.seconds);
+  });
   saveOptionState();
 }
 
@@ -148,6 +151,14 @@ useReferenceFrames.onchange = updateOptions;
 referenceImages.onchange = updateOptions;
 postToReels.onchange = updateOptions;
 if (autoStoryUpload) autoStoryUpload.onchange = updateOptions;
+document.querySelectorAll('.quick-duration-btn').forEach((btn) => {
+  btn.onclick = () => {
+    durationMode.value = 'custom';
+    durationSeconds.disabled = false;
+    durationSeconds.value = btn.dataset.seconds;
+    updateOptions();
+  };
+});
 updateOptions();
 
 // Bộ lọc trạng thái

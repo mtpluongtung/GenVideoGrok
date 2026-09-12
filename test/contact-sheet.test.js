@@ -69,13 +69,13 @@ test('từ chối khi không biết thời lượng video', async () => {
   await assert.rejects(extractContactSheets('missing.mp4', 'x', { duration: 0 }), /thời lượng video/);
 });
 
-test('ghi chú khung hình nói rõ thứ tự đọc, khoảng thời gian và việc không có âm thanh', () => {
+test('ghi chú khung hình nói rõ thứ tự đọc, khoảng thời gian và yêu cầu tái tạo lời thoại', () => {
   const note = describeContactSheets([
     { path: 'a.jpg', frames: 9, startSeconds: 0, endSeconds: 17.5 },
     { path: 'b.jpg', frames: 3, startSeconds: 17.5, endSeconds: 23 }
   ]);
   assert.match(note, /left-to-right then top-to-bottom/);
-  assert.match(note, /audio track is NOT available/);
+  assert.match(note, /spoken dialogue/i);
   assert.match(note, /Sheet 1: 9 frames covering 0\.0s–17\.5s/);
   assert.match(note, /Sheet 2: 3 frames covering 17\.5s–23\.0s/);
   assert.equal(describeContactSheets([]), '');

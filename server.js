@@ -638,7 +638,28 @@ async function runQueue() {
             });
             if (job.autoStoryUpload && story) {
               if (!job.thumbnailUrl) {
-                if (job.sourcePath) {
+                // Ưu tiên 1: Nhờ ChatGPT tạo ảnh minh họa (DALL-E) và tải file về máy
+                try {
+                  throwIfCancelled(isCancelled, 'Đã hủy trước khi tạo ảnh thu nhỏ.');
+                  job.stage = 'chatgpt_thumbnail';
+                  await saveJobs(jobs);
+                  const thumb = await generateStoryThumbnailWithChatGPT(job, story, (message) => {
+                    job.message = message; saveJobsInBackground(job);
+                  }, { isCancelled });
+                  throwIfCancelled(isCancelled, 'Đã hủy sau khi tạo ảnh thu nhỏ.');
+                  if (thumb?.thumbnailPath) {
+                    job.thumbnailPath = thumb.thumbnailPath;
+                    job.thumbnailUrl = thumb.thumbnailUrl;
+                    await saveJobs(jobs);
+                    await logJob(job.id, 'chatgpt.thumbnail.saved', { thumbnailUrl: job.thumbnailUrl });
+                  }
+                } catch (thumbErr) {
+                  if (isCancellation(thumbErr)) throw thumbErr;
+                  await logJob(job.id, 'chatgpt.thumbnail.warning', { error: sanitizeError(thumbErr) });
+                }
+
+                // Ưu tiên 2: Dự phòng trích xuất khung hình từ video nguồn nếu ChatGPT chưa tạo ảnh
+                if (!job.thumbnailUrl && job.sourcePath) {
                   try {
                     const keyframes = await extractStoryKeyframes(
                       job.sourcePath,
@@ -654,20 +675,10 @@ async function runQueue() {
                     await logJob(job.id, 'video.story_keyframe.warning', { error: sanitizeError(kfErr) });
                   }
                 }
-                if (!job.thumbnailUrl) {
-                  throwIfCancelled(isCancelled, 'Đã hủy trước khi tạo ảnh thu nhỏ.');
-                  job.stage = 'chatgpt_thumbnail';
-                  await saveJobs(jobs);
-                  const thumb = await generateStoryThumbnailWithChatGPT(job, story, (message) => {
-                    job.message = message; saveJobsInBackground(job);
-                  }, { isCancelled });
-                  throwIfCancelled(isCancelled, 'Đã hủy sau khi tạo ảnh thu nhỏ.');
-                  job.thumbnailPath = thumb.thumbnailPath;
-                  job.thumbnailUrl = thumb.thumbnailUrl;
-                  await saveJobs(jobs);
-                }
               }
               if (job.trendflareStatus !== 'published') {
+                job.stage = 'trendflare';
+                await saveJobs(jobs);
                 await uploadJobStoryToTrendflare(job, story, job.thumbnailPath, { isCancelled });
               }
             }

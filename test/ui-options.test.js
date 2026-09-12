@@ -333,3 +333,20 @@ test('tùy chọn độ dài clip Grok cập nhật bước nhảy và gợi ý 
   assert.match(await help.innerText(), /15 giây/);
 });
 
+test('nút chọn nhanh thời lượng đặt thời lượng tùy chỉnh 10s', async (t) => {
+  const page = await appPage(t);
+  await page.getByRole('button', { name: 'Video gốc' }).click();
+  const mode = page.locator('[name=durationMode]');
+  const seconds = page.locator('[name=durationSeconds]');
+
+  assert.equal(await mode.inputValue(), 'auto');
+  assert.equal(await seconds.isEnabled(), false);
+
+  await page.locator('.quick-duration-btn[data-seconds="10"]').click();
+  assert.equal(await mode.inputValue(), 'custom');
+  assert.equal(await seconds.inputValue(), '10');
+  assert.equal(await seconds.isEnabled(), true);
+  assert.match(await page.locator('#durationHelp').innerText(), /1 part × 10 giây/);
+});
+
+

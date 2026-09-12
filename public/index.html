@@ -92,6 +92,12 @@
               </select>
               <input name="durationSeconds" type="number" min="10" max="300" step="10" value="10" inputmode="numeric" aria-label="Thời lượng tùy chỉnh tính bằng giây">
             </div>
+            <div class="quick-durations" aria-label="Chọn nhanh thời lượng">
+              <button type="button" class="quick-duration-btn active" data-seconds="10" title="1 clip 10 giây">10s (1 clip)</button>
+              <button type="button" class="quick-duration-btn" data-seconds="15" title="1 clip 15 giây">15s</button>
+              <button type="button" class="quick-duration-btn" data-seconds="20" title="2 clip 10 giây">20s (2 clip)</button>
+              <button type="button" class="quick-duration-btn" data-seconds="30" title="3 clip 10 giây">30s (3 clip)</button>
+            </div>
             <small id="durationHelp" aria-live="polite">1 part × 10 giây. Thực tế có thể chênh một phần giây.</small>
           </fieldset>
 

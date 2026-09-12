@@ -37,12 +37,12 @@ test('chỉ nhận thời lượng tùy chỉnh theo part 10 giây', () => {
   assert.throws(() => parseTargetDuration({ type: 'upload', durationMode: 'custom', durationSeconds: 'NaN' }), /bội số 10/);
 });
 
-test('ngôn ngữ dùng allowlist và không tự ép thêm thoại', () => {
+test('ngôn ngữ dùng allowlist và yêu cầu tái tạo lời thoại âm thanh đầy đủ', () => {
   assert.equal(normalizeVideoLanguage(), 'auto');
   assert.equal(videoLanguageLabel('vi'), 'Tiếng Việt');
   assert.match(videoLanguageInstruction('vi', { hasSource: true }), /Vietnamese/);
-  assert.match(videoLanguageInstruction('vi', { hasSource: true }), /Do not add speech/);
-  assert.match(videoLanguageInstruction('auto', { hasSource: true }), /Preserve the spoken language/);
+  assert.match(videoLanguageInstruction('vi', { hasSource: true }), /lip-sync delivery/);
+  assert.match(videoLanguageInstruction('auto', { hasSource: true }), /character dialogue/i);
   assert.match(videoLanguageInstruction('none'), /Do not add spoken dialogue/);
   assert.throws(() => normalizeVideoLanguage('xx-invalid'), /không hợp lệ/);
 });

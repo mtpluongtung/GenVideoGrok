@@ -334,6 +334,38 @@ input[type="file"]::file-selector-button:hover {
   gap: 6px;
 }
 
+.quick-durations {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.quick-duration-btn {
+  background: #141a17;
+  border: 1px solid #232d28;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-duration-btn:hover {
+  border-color: #384940;
+  color: var(--text);
+  background: #1a221f;
+}
+
+.quick-duration-btn.active {
+  background: rgba(199, 255, 89, 0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* ==========================================================================
    ADVANCED SETTINGS
    ========================================================================== */
