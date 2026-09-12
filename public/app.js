@@ -4,6 +4,7 @@ let clipSeconds = 10;
 let currentFilter = 'all';
 let cachedJobs = [];
 const prompt = $('#form [name=prompt]');
+const clipSecondsSelect = $('#form [name=clipSeconds]');
 const durationMode = $('#form [name=durationMode]');
 const durationSeconds = $('#form [name=durationSeconds]');
 const language = $('#form [name=language]');
@@ -15,9 +16,9 @@ const autoStoryUpload = $('#form [name=autoStoryUpload]');
 const autoDurationOption = durationMode.querySelector('option[value=auto]');
 const autoLanguageOption = language.querySelector('option[value=auto]');
 const optionState = {
-  topic: { durationMode: 'custom', durationSeconds: '10', language: 'auto', prompt: '', writeStory: false, useReferenceFrames: true, postToReels: false, autoStoryUpload: false },
-  youtube: { durationMode: 'auto', durationSeconds: '10', language: 'auto', prompt: '', writeStory: false, useReferenceFrames: true, postToReels: false, autoStoryUpload: false },
-  upload: { durationMode: 'auto', durationSeconds: '10', language: 'auto', prompt: '', writeStory: false, useReferenceFrames: true, postToReels: false, autoStoryUpload: false }
+  topic: { durationMode: 'custom', durationSeconds: '10', clipSeconds: '10', language: 'auto', prompt: '', writeStory: false, useReferenceFrames: true, postToReels: false, autoStoryUpload: false },
+  youtube: { durationMode: 'auto', durationSeconds: '10', clipSeconds: '10', language: 'auto', prompt: '', writeStory: false, useReferenceFrames: true, postToReels: false, autoStoryUpload: false },
+  upload: { durationMode: 'auto', durationSeconds: '10', clipSeconds: '10', language: 'auto', prompt: '', writeStory: false, useReferenceFrames: true, postToReels: false, autoStoryUpload: false }
 };
 
 function toast(message) {
@@ -30,7 +31,8 @@ function toast(message) {
 function saveOptionState() {
   optionState[type] = {
     durationMode: durationMode.value,
-    durationSeconds: durationSeconds.value || '10',
+    durationSeconds: durationSeconds.value || String(clipSeconds),
+    clipSeconds: clipSecondsSelect ? clipSecondsSelect.value : String(clipSeconds),
     language: language.value,
     prompt: prompt.value,
     writeStory: type === 'upload' && writeStory.checked,
@@ -83,6 +85,12 @@ function updateOptions() {
 
 function restoreOptionState() {
   const state = optionState[type];
+  if (clipSecondsSelect && state.clipSeconds) {
+    clipSecondsSelect.value = state.clipSeconds;
+    clipSeconds = Number(state.clipSeconds) || 10;
+    durationSeconds.min = String(clipSeconds);
+    durationSeconds.step = String(clipSeconds);
+  }
   durationMode.value = state.durationMode;
   durationSeconds.value = state.durationSeconds;
   language.value = state.language;
@@ -117,6 +125,20 @@ function selectType(button) {
 }
 
 document.querySelectorAll('.tabs button').forEach((button) => { button.onclick = () => selectType(button); });
+if (clipSecondsSelect) {
+  clipSecondsSelect.onchange = () => {
+    clipSeconds = Number(clipSecondsSelect.value) || 10;
+    durationSeconds.min = String(clipSeconds);
+    durationSeconds.step = String(clipSeconds);
+    const maxVal = clipSeconds * 30;
+    durationSeconds.max = String(maxVal);
+    const current = Number(durationSeconds.value);
+    if (!Number.isInteger(current) || current < clipSeconds || current % clipSeconds !== 0) {
+      durationSeconds.value = String(clipSeconds);
+    }
+    updateOptions();
+  };
+}
 durationMode.onchange = updateOptions;
 durationSeconds.oninput = updateOptions;
 language.onchange = updateOptions;
@@ -144,10 +166,12 @@ async function loadConfig() {
     if (!response.ok) return;
     const config = await response.json();
     clipSeconds = Number(config.clipSeconds) || clipSeconds;
+    if (clipSecondsSelect) clipSecondsSelect.value = String(clipSeconds);
     durationSeconds.min = String(clipSeconds);
     durationSeconds.step = String(clipSeconds);
     durationSeconds.max = String(clipSeconds * (Number(config.maxParts) || 30));
     for (const key of Object.keys(optionState)) {
+      optionState[key].clipSeconds = String(clipSeconds);
       const current = Number(optionState[key].durationSeconds);
       if (!Number.isInteger(current) || current % clipSeconds !== 0) optionState[key].durationSeconds = String(clipSeconds);
     }

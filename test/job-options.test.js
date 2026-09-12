@@ -47,18 +47,18 @@ test('ngôn ngữ dùng allowlist và không tự ép thêm thoại', () => {
   assert.throws(() => normalizeVideoLanguage('xx-invalid'), /không hợp lệ/);
 });
 
-test('thứ tự ưu tiên độ dài clip mặc định là 15s rồi 10s', () => {
-  assert.deepEqual(clipSecondsPreference(''), [15, 10]);
-  assert.deepEqual(clipSecondsPreference(undefined), [15, 10]);
-  assert.equal(preferredClipSeconds(''), 15);
+test('thứ tự ưu tiên độ dài clip mặc định là 10s rồi 15s và 5s', () => {
+  assert.deepEqual(clipSecondsPreference(''), [10, 15, 5]);
+  assert.deepEqual(clipSecondsPreference(undefined), [10, 15, 5]);
+  assert.equal(preferredClipSeconds(''), 10);
 });
 
 test('GROK_CLIP_SECONDS ghi đè được thứ tự và bỏ giá trị Grok không có', () => {
-  assert.deepEqual(clipSecondsPreference('10,15'), [10, 15]);
+  assert.deepEqual(clipSecondsPreference('15,10'), [15, 10]);
   assert.deepEqual(clipSecondsPreference('10s, 5s'), [10, 5]);
-  assert.deepEqual(clipSecondsPreference('7,12'), [15, 10], 'giá trị lạ bị bỏ, quay về mặc định');
-  assert.deepEqual(clipSecondsPreference('15,15,10'), [15, 10], 'không lặp giá trị');
-  assert.equal(preferredClipSeconds('10'), 10);
+  assert.deepEqual(clipSecondsPreference('7,12'), [10, 15, 5], 'giá trị lạ bị bỏ, quay về mặc định');
+  assert.deepEqual(clipSecondsPreference('10,10,15'), [10, 15], 'không lặp giá trị');
+  assert.equal(preferredClipSeconds('15'), 15);
 });
 
 test('thời lượng phải là bội số của độ dài clip đang dùng', () => {

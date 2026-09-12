@@ -313,3 +313,23 @@ test('nút Tạo lại video nói rõ là giữ kịch bản và chỉ dựng l�
   assert.match(await rerun.innerText(), /Tạo lại video/);
   assert.match(await rerun.getAttribute('title'), /Giữ kịch bản ChatGPT.*dựng lại video/);
 });
+
+test('tùy chọn độ dài clip Grok cập nhật bước nhảy và gợi ý thời lượng', async (t) => {
+  const page = await appPage(t);
+  const clipSelect = page.locator('[name=clipSeconds]');
+  const secondsInput = page.locator('[name=durationSeconds]');
+  const help = page.locator('#durationHelp');
+
+  assert.equal(await clipSelect.inputValue(), '10');
+  await clipSelect.selectOption('5');
+  assert.equal(await secondsInput.getAttribute('step'), '5');
+  assert.equal(await secondsInput.getAttribute('min'), '5');
+  await secondsInput.fill('15');
+  assert.match(await help.innerText(), /3 part × 5 giây/);
+
+  await clipSelect.selectOption('15');
+  assert.equal(await secondsInput.getAttribute('step'), '15');
+  assert.equal(await secondsInput.getAttribute('min'), '15');
+  assert.match(await help.innerText(), /15 giây/);
+});
+

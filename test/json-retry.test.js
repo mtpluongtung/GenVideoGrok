@@ -43,6 +43,11 @@ test('escapeStrayQuotes giữ nguyên JSON vốn hợp lệ và thoát xuống d
   assert.deepEqual(JSON.parse(escapeStrayQuotes('{"text":"line one\nline two"}')), { text: 'line one\nline two' });
 });
 
+test('escapeStrayQuotes xử lý chuẩn xác lời thoại có dấu phẩy sau ngoặc kép', () => {
+  const rawWithStray = '{\n"prompt": "The man says "Take this", and hands warm food to the boy."\n}';
+  assert.equal(parseLenientJson(rawWithStray).prompt, 'The man says "Take this", and hands warm food to the boy.');
+});
+
 test('parseLenientJson vẫn ném lỗi gốc khi không vá được', () => {
   assert.throws(() => parseLenientJson('{"a": }'), SyntaxError);
 });

@@ -71,8 +71,18 @@
           <small id="promptHelp">Để trống: ChatGPT tìm xu hướng hiện tại, chọn ý tưởng và chia kịch bản theo đúng thời lượng.</small>
         </label>
 
-        <!-- CẤU HÌNH CƠ BẢN: THỜI LƯỢNG & NGÔN NGỮ -->
+        <!-- CẤU HÌNH CƠ BẢN: ĐỘ DÀI CLIP, THỜI LƯỢNG & NGÔN NGỮ -->
         <div class="options-grid">
+          <label class="option-field">
+            <span>Độ dài mỗi clip Grok</span>
+            <select name="clipSeconds" aria-label="Độ dài mỗi clip Grok">
+              <option value="5">5 giây / clip</option>
+              <option value="10" selected>10 giây / clip (chuẩn Grok)</option>
+              <option value="15">15 giây / clip</option>
+            </select>
+            <small id="clipSecondsHelp">Grok tạo từng đoạn rồi tự ghép nối.</small>
+          </label>
+
           <fieldset class="option-field">
             <legend>Thời lượng video</legend>
             <div class="duration-controls">
